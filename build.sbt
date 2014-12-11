@@ -10,6 +10,8 @@ libraryDependencies += "com.github.scopt" %% "scopt" % "3.2.0"
 
 libraryDependencies += "org.scalatest" % "scalatest_2.11" % "2.2.1" % "test"
 
+libraryDependencies += "org.scalaz" %% "scalaz-core" % "7.1.0"
+
 buildInfoSettings
 
 sourceGenerators in Compile <+= buildInfo
