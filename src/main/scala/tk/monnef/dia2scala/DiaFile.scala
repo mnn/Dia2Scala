@@ -1,14 +1,20 @@
 package tk.monnef.dia2scala
 
+import tk.monnef.dia2scala.DiaVisibility.DiaVisibility
+
 case class DiaFile(packages: Seq[DiaPackage], classes: Seq[DiaClass])
+
+object DiaFile {
+  def apply(): DiaFile = DiaFile(Seq(), Seq())
+}
 
 case class DiaPackage(name: String, geometry: DiaGeometry)
 
-case class DiaClass(name: String, geometry: DiaGeometry, inPackage: String, extendsFrom: String, mixins: Seq[String], id: String)
+case class DiaClass(name: String, geometry: DiaGeometry, inPackage: String, extendsFrom: String, mixins: Seq[String], id: String, attributes: Seq[DiaAttribute], operations: Seq[DiaOperationDescriptor])
 
-case class DiaOperatorDescriptor(name: String, visibility: DiaVisibility, parameters: Seq[DiaOperatorParameter])
+case class DiaOperationDescriptor(name: String, visibility: DiaVisibility, parameters: Seq[DiaOperationParameter])
 
-case class DiaOperatorParameter(name: String, pType: Option[String])
+case class DiaOperationParameter(name: String, pType: Option[String])
 
 case class DiaAttribute(name: String, aType: Option[String], visibility: DiaVisibility)
 
@@ -38,13 +44,7 @@ case object DiaImplementsType extends DiaOneWayConnectionType
 
 case object DiaMixinType extends DiaOneWayConnectionType
 
-
-sealed class DiaVisibility
-
-case object DiaPrivate extends DiaVisibility
-
-case object DiaProtected extends DiaVisibility
-
-case object DiaPublic extends DiaVisibility
-
-case object DiaImplementation extends DiaVisibility
+object DiaVisibility extends Enumeration {
+  type DiaVisibility = Value
+  val Public, Private, Protected, Implementation = Value
+}

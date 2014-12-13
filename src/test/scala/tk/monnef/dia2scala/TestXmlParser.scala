@@ -51,4 +51,12 @@ class TestXmlParser extends FlatSpec {
       assert(res == DiaPackage("packageB", DiaGeometry(11, 1, 17, 7)))
     }
   }
+
+  final val xmlAttribute = "       <dia:composite type=\"umlattribute\">\n          <dia:attribute name=\"name\">\n            <dia:string>#aReference#</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"type\">\n            <dia:string>#ClassA#</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"value\">\n            <dia:string>##</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"comment\">\n            <dia:string>##</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"visibility\">\n            <dia:enum val=\"2\"/>\n          </dia:attribute>\n          <dia:attribute name=\"abstract\">\n            <dia:boolean val=\"false\"/>\n          </dia:attribute>\n          <dia:attribute name=\"class_scope\">\n            <dia:boolean val=\"false\"/>\n          </dia:attribute> </dia:composite>"
+
+  "processAttribute" should "process an attribute" in {
+    val elem = xml.XML.loadString(xmlAttribute)
+    val res = XmlParserHelper.processAttribute(elem)
+    assert(res == DiaAttribute("aReference", Some("ClassA"), DiaVisibility.Protected))
+  }
 }
