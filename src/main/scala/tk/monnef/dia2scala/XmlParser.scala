@@ -60,6 +60,7 @@ object XmlParserHelper {
 
   final val DiaCompositeTypeUMLAttribute = "umlattribute"
   final val DiaCompositeTypeUMLOperation = "umloperation"
+  final val DiaCompositeTypeUMLParameter = "umlparameter"
 
   final val DiaAttributeName = "name"
   final val DiaAttributeType = "type"
@@ -72,6 +73,7 @@ object XmlParserHelper {
   final val DiaAttributeValue = "value"
   final val DiaAttributeVisibility = "visibility"
   final val DiaAttributeId = "id"
+  final val DiaAttributeParameters = "parameters"
 
   final val StringBarrier = '#'
 
@@ -127,12 +129,9 @@ object XmlParserHelper {
 
   def processPackage(n: Node): \/[String, DiaPackage] =
     wrapErrorToJunction {
-      val typeAttr = n \@ DiaAttributeType
-      val nodeLabel = n.label
-      if (nodeLabel != DiaNodeTypeObject || typeAttr != DiaObjectTypePackage)
-        throw new RuntimeException(s"Node is not a package ($nodeLabel, $typeAttr)!\n$n")
-      val name = extractDiaAttributeStringAndStrip(n, DiaAttributeName)
-      DiaPackage(name, extractGeometry(n))
+      assertNodeName(n, DiaNodeTypeObject)
+      assertAttributeType(n, DiaObjectTypePackage)
+      DiaPackage(extractAttributeName(n), extractGeometry(n))
     }
 
   def processPackages(e: Elem, f: DiaFile): \/[String, DiaFile] = {
@@ -140,13 +139,41 @@ object XmlParserHelper {
     packages.map { p => f.copy(packages = p)}
   }
 
-  def processAttribute(n: Node): DiaAttribute = {
+  def assertNodeName(n: Node, expected: String) {
+    val nodeLabel = n.label
+    if (nodeLabel != expected) throw new RuntimeException(s"Node label is not an $expected, but $nodeLabel.\n$n")
+  }
+
+  def assertAttributeType(n: Node, expected: String) {
     val attributeName = n \@ DiaAttributeType
-    if (attributeName != DiaCompositeTypeUMLAttribute) throw new RuntimeException(s"Attribute name is not an $DiaCompositeTypeUMLAttribute, but $attributeName.\n$n")
+    if (attributeName != expected) throw new RuntimeException(s"Attribute type is not an $expected, but $attributeName (${n.label}, ${n.text}).\n$n")
+  }
+
+  def extractAttributeName(n: Node): String = extractDiaAttributeStringAndStrip(n, DiaAttributeName)
+
+  def processAttribute(n: Node): DiaAttribute = {
+    assertAttributeType(n, DiaCompositeTypeUMLAttribute)
     DiaAttribute(
-      extractDiaAttributeStringAndStrip(n, DiaAttributeName),
+      extractAttributeName(n),
       extractDiaAttributeStringAndStrip(n, DiaAttributeType) |> wrapNonEmptyStringToSome,
       extractVisibility(n)
+    )
+  }
+
+  def processParameter(n: Node): DiaOperationParameter = {
+    assertAttributeType(n, DiaCompositeTypeUMLParameter)
+    DiaOperationParameter(
+      extractAttributeName(n),
+      extractDiaAttributeStringAndStrip(n, DiaAttributeType) |> wrapNonEmptyStringToSome
+    )
+  }
+
+  def processOperation(n: Node): DiaOperationDescriptor = {
+    assertAttributeType(n, DiaCompositeTypeUMLOperation)
+    DiaOperationDescriptor(
+      extractAttributeName(n),
+      extractVisibility(n),
+      (extractDiaAttributeByName(n, DiaAttributeParameters) \ DiaNodeTypeComposite).map(processParameter)
     )
   }
 
@@ -155,10 +182,10 @@ object XmlParserHelper {
       val stereotype = extractDiaAttributeStringAndStrip(n, DiaAttributeStereotype)
 
       val attributes = extractDiaAttributesMatchingName(n, DiaAttributeAttributes).map(processAttribute)
-      val operations = Seq()
+      val operations = extractDiaAttributesMatchingName(n, DiaAttributeOperations).map(processOperation)
 
       DiaClass(
-        extractDiaAttributeStringAndStrip(n, DiaAttributeName),
+        extractAttributeName(n),
         extractGeometry(n),
         "",
         "",
