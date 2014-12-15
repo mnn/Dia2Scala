@@ -35,4 +35,15 @@ object Utils {
   }
 
   def wrapNonEmptyStringToSome(s: String): Option[String] = (s != null && s.nonEmpty) ? s.some | None
+
+  implicit class StringPimps(s: String) {
+    def capitalizeFirst: String =
+      if (s.size < 1) s
+      else s.take(1).toUpperCase + s.drop(1)
+  }
+
+  def printToFile(f: java.io.File)(op: java.io.PrintWriter => Unit) {
+    val p = new java.io.PrintWriter(f)
+    try {op(p)} finally {p.close()}
+  }
 }

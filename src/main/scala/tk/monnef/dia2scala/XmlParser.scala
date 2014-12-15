@@ -174,7 +174,8 @@ object XmlParserHelper {
     DiaOperationDescriptor(
       extractAttributeName(n),
       extractVisibility(n),
-      (extractDiaAttributeByName(n, DiaAttributeParameters) \ DiaNodeTypeComposite).map(processParameter)
+      (extractDiaAttributeByName(n, DiaAttributeParameters) \ DiaNodeTypeComposite).map(processParameter),
+      extractDiaAttributeStringAndStrip(n, DiaAttributeType) |> wrapNonEmptyStringToSome
     )
   }
 

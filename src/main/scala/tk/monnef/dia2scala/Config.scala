@@ -4,7 +4,7 @@ import java.io.File
 
 import tk.monnef.dia2scala.BuildInfoWrapper._
 
-case class Config(file: File = null, unpack: Boolean = true, verbosity: VerbosityLevel = NotVerbose)
+case class Config(file: File = null, unpack: Boolean = true, verbosity: VerbosityLevel = NotVerbose, outputPath: String = "out")
 
 object CommandLineParser {
   def apply(args: Array[String]): Option[Config] = {
@@ -26,6 +26,9 @@ object CommandLineParser {
       opt[Unit]("veryverbose") abbr "vv" action { (_, c) =>
         c.copy(verbosity = ExtraVerbose)
       } text "prints a lot of debug information"
+      opt[String]('o', "outputpath") valueName "<path>" action { (x, c) =>
+        c.copy(outputPath = x)
+      } text "output directory"
     }
     parser.parse(args, Config())
   }
