@@ -34,7 +34,7 @@ object XmlParser {
         for {
           a <- processPackages(xml, DiaFile())
           b <- semiProcessClasses(xml, a)
-        } yield a
+        } yield b
     }
   }
 }
@@ -57,6 +57,7 @@ object XmlParserHelper {
   final val DiaNodeTypeEnum = "enum"
 
   final val DiaObjectTypePackage = "UML - LargePackage"
+  final val DiaObjectTypeClass = "UML - Class"
 
   final val DiaCompositeTypeUMLAttribute = "umlattribute"
   final val DiaCompositeTypeUMLOperation = "umloperation"
@@ -141,12 +142,12 @@ object XmlParserHelper {
 
   def assertNodeName(n: Node, expected: String) {
     val nodeLabel = n.label
-    if (nodeLabel != expected) throw new RuntimeException(s"Node label is not an $expected, but $nodeLabel.\n$n")
+    if (nodeLabel != expected) throw new RuntimeException(s"Node label is not an '$expected', but '$nodeLabel'.\n$n")
   }
 
   def assertAttributeType(n: Node, expected: String) {
     val attributeName = n \@ DiaAttributeType
-    if (attributeName != expected) throw new RuntimeException(s"Attribute type is not an $expected, but $attributeName (${n.label}, ${n.text}).\n$n")
+    if (attributeName != expected) throw new RuntimeException(s"Attribute type is not an '$expected', but '$attributeName' (label='${n.label}', text='${n.text}').\n$n")
   }
 
   def extractAttributeName(n: Node): String = extractDiaAttributeStringAndStrip(n, DiaAttributeName)
@@ -177,12 +178,14 @@ object XmlParserHelper {
     )
   }
 
-  def processClass(n: Node): \/[String, DiaClass] =
+  def processClass(n: Node): \/[String, DiaClass] = {
+    assertNodeName(n, DiaNodeTypeObject)
+    assertAttributeType(n, DiaObjectTypeClass)
     wrapErrorToJunction {
       val stereotype = extractDiaAttributeStringAndStrip(n, DiaAttributeStereotype)
 
-      val attributes = extractDiaAttributesMatchingName(n, DiaAttributeAttributes).map(processAttribute)
-      val operations = extractDiaAttributesMatchingName(n, DiaAttributeOperations).map(processOperation)
+      val attributes = (extractDiaAttributesMatchingName(n, DiaAttributeAttributes) \ DiaNodeTypeComposite).map(processAttribute)
+      val operations = (extractDiaAttributesMatchingName(n, DiaAttributeOperations) \ DiaNodeTypeComposite).map(processOperation)
 
       DiaClass(
         extractAttributeName(n),
@@ -195,9 +198,27 @@ object XmlParserHelper {
         operations
       )
     }
-
-  def semiProcessClasses(e: Elem, f: DiaFile): \/[String, DiaFile] = {
-    val classes = extractObjectsByType(e, DiaObjectTypePackage).map(processClass) |> liftFirstError
-    classes.map { c => f.copy(classes = c)}
   }
+
+  def getPackageForClass(f: DiaFile, c: DiaClass): Option[DiaPackage] = {
+    val inPackages = f.packages.filter(p => p.geometry.contains(c.geometry))
+    // TODO: support for nested packages
+    // sort by "contains" and return either most inner or path of packages
+    inPackages.headOption
+  }
+
+  def assignPackages(f: DiaFile): DiaFile = {
+    val newClasses = f.classes map { c =>
+      c.copy(inPackage = getPackageForClass(f, c).map(_.name).getOrElse(""))
+    }
+    assert(newClasses.size == f.classes.size)
+    f.copy(classes = newClasses)
+  }
+
+  def semiProcessClasses(e: Elem, f: DiaFile): \/[String, DiaFile] =
+    for {
+      parsedClasses <- extractObjectsByType(e, DiaObjectTypeClass).map(processClass) |> liftFirstError
+      fileParsedClasses = f.copy(classes = parsedClasses)
+      filePackagedClasses = assignPackages(fileParsedClasses)
+    } yield filePackagedClasses
 }

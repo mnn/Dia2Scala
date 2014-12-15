@@ -18,7 +18,15 @@ case class DiaOperationParameter(name: String, pType: Option[String])
 
 case class DiaAttribute(name: String, aType: Option[String], visibility: DiaVisibility)
 
-case class DiaGeometry(x: Double, y: Double, width: Double, height: Double)
+case class DiaGeometry(x: Double, y: Double, width: Double, height: Double) {
+  def contains(other: DiaGeometry): Boolean = contains(other.x, other.y, other.width, other.height)
+
+  def contains(ox: Double, oy: Double, oWidth: Double, oHeight: Double): Boolean =
+    ox > x &&
+      oy > y &&
+      ox + oWidth < x + width &&
+      oy + oHeight < y + height
+}
 
 case class DiaOneWayConnection(fromId: String, toId: String, cType: DiaOneWayConnectionType)
 
