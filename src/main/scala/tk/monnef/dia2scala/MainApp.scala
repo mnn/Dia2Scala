@@ -20,7 +20,7 @@ object MainApp extends App {
 
   private def process(config: Config): Int =
     (for {
-      parsedFile <- XmlParser.parseFile(config.file, !config.unpack)
+      parsedFile <- XmlParser.parseFile(config.file, config.unpack)
       code <- CodeEmitter.emit(parsedFile)
       result <- CodeWriter.writeTextFile(code, config.outputPath)
     } yield result).

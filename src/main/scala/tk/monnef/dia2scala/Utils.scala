@@ -46,4 +46,9 @@ object Utils {
     val p = new java.io.PrintWriter(f)
     try {op(p)} finally {p.close()}
   }
+
+  implicit class SeqPimps[T](s: Seq[T]) {
+    def dropWhileRight(p: T => Boolean): Seq[T] = s.reverse.dropWhile(p).reverse
+  }
+
 }
