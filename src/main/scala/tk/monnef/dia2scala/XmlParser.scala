@@ -24,17 +24,18 @@ object XmlParser {
         * - parse and process packages
         * - parse and semi-process classes:
         *     - name, attributes (not yet from association connections) and operators
-         *    - handle <<enumeration>>
+         *    - handle <<enumeration>> TODO
         *     - compute package
-        * - parse and process generalization
-        * - parse and process <<implements>>
-        * - parse and process <<mixin>>
-        * - parse and process associations
+        * - parse and process generalization TODO
+        * - parse and process <<implements>> TODO
+        * - parse and process <<mixin>> TODO
+        * - parse and process associations TODO
         */
         for {
           a <- processPackages(xml, DiaFile())
           b <- semiProcessClasses(xml, a)
-        } yield b
+          c <- processGeneralization(xml, b)
+        } yield c
     }
   }
 }
@@ -55,9 +56,12 @@ object XmlParserHelper {
   final val DiaNodeTypeBoolean = "boolean"
   final val DiaNodeTypeComposite = "composite"
   final val DiaNodeTypeEnum = "enum"
+  final val DiaNodeTypeConnections = "connections"
+  final val DiaNodeTypeConnection = "connection"
 
   final val DiaObjectTypePackage = "UML - LargePackage"
   final val DiaObjectTypeClass = "UML - Class"
+  final val DiaObjectTypeGeneralization = "UML - Generalization"
 
   final val DiaCompositeTypeUMLAttribute = "umlattribute"
   final val DiaCompositeTypeUMLOperation = "umloperation"
@@ -222,4 +226,33 @@ object XmlParserHelper {
       fileParsedClasses = f.copy(classes = parsedClasses)
       filePackagedClasses = assignPackages(fileParsedClasses)
     } yield filePackagedClasses
+
+  def parseConnections(n: Node): (String, String) = {
+    assertNodeName(n, DiaNodeTypeConnections)
+    def getTargetOfConnection(handle: Int): String = ((n \ DiaNodeTypeConnection) filter (_ \@ "handle" == handle.toString)) \@ "to"
+    (getTargetOfConnection(1), getTargetOfConnection(0)) // from -> to
+  }
+
+  def parseGeneralization(n: Node): DiaOneWayConnection = {
+    assertNodeName(n, DiaNodeTypeObject)
+    assertAttributeType(n, DiaObjectTypeGeneralization)
+    val conns = parseConnections((n \ DiaNodeTypeConnections).head)
+    DiaOneWayConnection(conns._1, conns._2, DiaGeneralizationType)
+  }
+
+  def processGeneralization(e: Elem, f: DiaFile): \/[String, DiaFile] =
+    wrapErrorToJunction {
+      val generalizations = extractObjectsByType(e, DiaObjectTypeGeneralization).map(parseGeneralization)
+      Log.printDebug(s"Got ${generalizations.size} generalizations parsed: ${generalizations.map(g => g.cType.toString + ":" + g.fromId + "->" + g.toId).mkString(", ")}.")
+      val startPointToGeneneralization = generalizations.map { g => g.fromId -> g}.toMap
+      val idToClass = f.classes.map { c => c.id -> c}.toMap
+
+      val newClasses: Seq[DiaClass] = f.classes.map { c =>
+        startPointToGeneneralization.get(c.id) match {
+          case Some(gen) => c.copy(extendsFrom = idToClass(gen.toId).name)
+          case None => c
+        }
+      }
+      f.copy(classes = newClasses)
+    }
 }
