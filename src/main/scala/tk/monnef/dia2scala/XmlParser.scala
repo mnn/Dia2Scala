@@ -27,15 +27,14 @@ object XmlParser {
         *     - name, attributes (not yet from association connections) and operators
          *    - handle <<enumeration>> TODO
         *     - compute package
-        * - parse and process generalization TODO
-        * - parse and process <<implements>> TODO
-        * - parse and process <<mixin>> TODO
+        * - parse and process generalization
+        * - parse and process <<implements>>, <<mixin>>, <<hasA>>  TODO
         * - parse and process associations TODO
         */
         for {
           a <- processPackages(xml, DiaFile())
           b <- semiProcessClasses(xml, a)
-          c <- processGeneralization(xml, b)
+          c <- processOneWayConnections(xml, b)
         } yield c
     }
   }
@@ -90,7 +89,7 @@ object XmlParserHelper {
         |> {new InputStreamReader(_)}
     }
 
-  def extractObjectsByType(e: Elem, objType: String): NodeSeq = e \\ DiaNodeTypeObject filter {_ \@ DiaAttributeType == objType}
+  def extractObjectsByType(e: Node, objType: String): NodeSeq = e \\ DiaNodeTypeObject filter {_ \@ DiaAttributeType == objType}
 
   def extractDiaAttributesMatchingName(n: Node, name: String): Seq[Node] = (n \\ DiaNodeTypeAttribute filter {_ \@ DiaAttributeName == name})
 
@@ -155,6 +154,11 @@ object XmlParserHelper {
     if (attributeName != expected) throw new RuntimeException(s"Attribute type is not an '$expected', but '$attributeName' (label='${n.label}', text='${n.text}').\n$n")
   }
 
+  def assertNodeObjectAndTypeAttribute(n: Node, expected: String) {
+    assertNodeName(n, DiaNodeTypeObject)
+    assertAttributeType(n, expected)
+  }
+
   def extractAttributeName(n: Node): String = extractDiaAttributeStringAndStrip(n, DiaAttributeName)
 
   def processAttribute(n: Node): DiaAttribute = {
@@ -185,8 +189,7 @@ object XmlParserHelper {
   }
 
   def processClass(n: Node): \/[String, DiaClass] = {
-    assertNodeName(n, DiaNodeTypeObject)
-    assertAttributeType(n, DiaObjectTypeClass)
+    assertNodeObjectAndTypeAttribute(n, DiaObjectTypeClass)
     wrapErrorToJunction {
       val stereotype = extractDiaAttributeStringAndStrip(n, DiaAttributeStereotype)
       val classType = stereotype match {
@@ -245,25 +248,35 @@ object XmlParserHelper {
     (getTargetOfConnection(1), getTargetOfConnection(0)) // from -> to
   }
 
+  def parsedConnectionIdsToOneWayConnection(connectionsIds: (String, String), cType: DiaOneWayConnectionType): DiaOneWayConnection =
+    DiaOneWayConnection(connectionsIds._1, connectionsIds._2, cType)
+
   def parseGeneralization(n: Node): DiaOneWayConnection = {
-    assertNodeName(n, DiaNodeTypeObject)
-    assertAttributeType(n, DiaObjectTypeGeneralization)
-    val conns = parseConnections((n \ DiaNodeTypeConnections).head)
-    DiaOneWayConnection(conns._1, conns._2, DiaGeneralizationType)
+    assertNodeObjectAndTypeAttribute(n, DiaObjectTypeGeneralization)
+    parseConnections((n \ DiaNodeTypeConnections).head) |> {parsedConnectionIdsToOneWayConnection(_, DiaGeneralizationType)}
   }
 
-  def processGeneralization(e: Elem, f: DiaFile): \/[String, DiaFile] =
-    wrapErrorToJunction {
-      val generalizations = extractObjectsByType(e, DiaObjectTypeGeneralization).map(parseGeneralization)
-      Log.printDebug(s"Got ${generalizations.size} generalizations parsed: ${generalizations.map(g => g.cType.toString + ":" + g.fromId + "->" + g.toId).mkString(", ")}.")
-      val startPointToGeneneralization = generalizations.map { g => g.fromId -> g}.toMap
-
-      val newClasses: Seq[DiaClass] = f.classes.map { c =>
-        startPointToGeneneralization.get(c.id) match {
-          case Some(gen) => c.copy(extendsFrom = f.idToClass(gen.toId).name)
-          case None => c
-        }
+  def processGeneralization(i: OneWayConnectionProcessorData): DiaFile =
+    i.f.copy(classes = i.f.classes.map { c =>
+      i.fromIdToConn.get(c.id) match {
+        case Some(gen) => c.copy(extendsFrom = i.f.idToClass(gen.toId).name)
+        case None => c
       }
-      f.copy(classes = newClasses)
+    })
+
+  case class OneWayConnectionProcessorData(f: DiaFile, c: DiaOneWayConnection, fromIdToConn: Map[String, DiaOneWayConnection], toIdToConn: Map[String, DiaOneWayConnection])
+
+  def processOneWayConnection(n: Node, f: DiaFile, objType: String, extractor: (Node) => DiaOneWayConnection, processor: (OneWayConnectionProcessorData) => DiaFile): \/[String, DiaFile] =
+    wrapErrorToJunction {
+      val nodes = extractObjectsByType(n, objType)
+      val connections = nodes.map(extractor)
+      val fromIdToConn = connections.map { c => c.fromId -> c}.toMap
+      val toIdToConn = connections.map { c => c.toId -> c}.toMap
+      connections.foldLeft(f) { (acc, item) => processor(OneWayConnectionProcessorData(acc, item, fromIdToConn, toIdToConn))}
     }
+
+  def processOneWayConnections(e: Elem, f: DiaFile): \/[String, DiaFile] =
+    for {
+      a <- processOneWayConnection(e, f, DiaObjectTypeGeneralization, parseGeneralization, processGeneralization)
+    } yield a
 }
