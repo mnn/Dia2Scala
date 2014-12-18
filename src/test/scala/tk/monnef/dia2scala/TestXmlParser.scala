@@ -79,14 +79,22 @@ class TestXmlParser extends FlatSpec {
   "processClass" should "process a class" in {
     val elem = xml.XML.loadString(xmlClass)
     rightOrFailIn(XmlParserHelper.processClass(elem)) { res =>
-      assert(res == DiaClass("ClassB", DiaGeometry(13, 3, 11.665000000000001, 3.3999999999999999), "", "", Seq(), "O2", Seq(expectedAttributeA), Seq(expectedOperation)))
+      assert(res == DiaClass("ClassB", DiaGeometry(13, 3, 11.665000000000001, 3.3999999999999999), "", "", Seq(), "O2", Seq(expectedAttributeA), Seq(expectedOperation), DiaClassType.Class))
     }
+  }
+
+  final val xmlConnections = "      <dia:connections>\n        <dia:connection handle=\"0\" to=\"O2\" connection=\"0\"/>\n        <dia:connection handle=\"1\" to=\"O1\" connection=\"8\"/>\n      </dia:connections>"
+  "parseConnections" should "parse a connection node" in {
+    val elem = xml.XML.loadString(xmlConnections)
+    val (fromId, toId) = XmlParserHelper.parseConnections(elem)
+    assert(fromId == "O1")
+    assert(toId == "O2")
   }
 
   final val xmlGeneralization = "    <dia:object type=\"UML - Generalization\" version=\"1\" id=\"O3\">\n      <dia:attribute name=\"obj_pos\">\n        <dia:point val=\"13,3\"/>\n      </dia:attribute>\n      <dia:attribute name=\"obj_bb\">\n        <dia:rectangle val=\"6.47294,2.15;13.05,7.15\"/>\n      </dia:attribute>\n      <dia:attribute name=\"meta\">\n        <dia:composite type=\"dict\"/>\n      </dia:attribute>\n      <dia:attribute name=\"orth_points\">\n        <dia:point val=\"13,3\"/>\n        <dia:point val=\"9.36147,3\"/>\n        <dia:point val=\"9.36147,7.1\"/>\n        <dia:point val=\"6.52294,7.1\"/>\n      </dia:attribute>\n      <dia:attribute name=\"orth_orient\">\n        <dia:enum val=\"0\"/>\n        <dia:enum val=\"1\"/>\n        <dia:enum val=\"0\"/>\n      </dia:attribute>\n      <dia:attribute name=\"orth_autoroute\">\n        <dia:boolean val=\"true\"/>\n      </dia:attribute>\n      <dia:attribute name=\"text_colour\">\n        <dia:color val=\"#000000\"/>\n      </dia:attribute>\n      <dia:attribute name=\"line_colour\">\n        <dia:color val=\"#000000\"/>\n      </dia:attribute>\n      <dia:attribute name=\"name\">\n        <dia:string>##</dia:string>\n      </dia:attribute>\n      <dia:attribute name=\"stereotype\">\n        <dia:string>##</dia:string>\n      </dia:attribute>\n      <dia:connections>\n        <dia:connection handle=\"0\" to=\"O2\" connection=\"0\"/>\n        <dia:connection handle=\"1\" to=\"O1\" connection=\"8\"/>\n      </dia:connections>\n    </dia:object>"
   "parseGeneralization" should "parse a valid generalization" in {
     val elem = xml.XML.loadString(xmlGeneralization)
     val res = XmlParserHelper.parseGeneralization(elem)
-    assert(res == DiaOneWayConnection("O2", "O1", DiaGeneralizationType))
+    assert(res == DiaOneWayConnection("O1", "O2", DiaGeneralizationType))
   }
 }

@@ -1,16 +1,17 @@
 package tk.monnef.dia2scala
 
+import tk.monnef.dia2scala.DiaClassType.DiaClassType
 import tk.monnef.dia2scala.DiaVisibility.DiaVisibility
 
-case class DiaFile(packages: Seq[DiaPackage], classes: Seq[DiaClass])
+case class DiaFile(packages: Seq[DiaPackage], classes: Seq[DiaClass], idToClass: Map[String, DiaClass])
 
 object DiaFile {
-  def apply(): DiaFile = DiaFile(Seq(), Seq())
+  def apply(): DiaFile = DiaFile(Seq(), Seq(), Map())
 }
 
 case class DiaPackage(name: String, geometry: DiaGeometry)
 
-case class DiaClass(name: String, geometry: DiaGeometry, inPackage: String, extendsFrom: String, mixins: Seq[String], id: String, attributes: Seq[DiaAttribute], operations: Seq[DiaOperationDescriptor])
+case class DiaClass(name: String, geometry: DiaGeometry, inPackage: String, extendsFrom: String, mixins: Seq[String], id: String, attributes: Seq[DiaAttribute], operations: Seq[DiaOperationDescriptor], classType: DiaClassType)
 
 case class DiaOperationDescriptor(name: String, visibility: DiaVisibility, parameters: Seq[DiaOperationParameter], oType: Option[String])
 
@@ -67,4 +68,9 @@ object DiaVisibility extends Enumeration {
     def code: String = dvToCode(dv)
   }
 
+}
+
+object DiaClassType extends Enumeration {
+  type DiaClassType = Value
+  val Class, Enumeration, Trait, Object = Value
 }

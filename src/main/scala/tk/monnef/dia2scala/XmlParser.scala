@@ -6,6 +6,7 @@ import tk.monnef.dia2scala.DiaVisibility.DiaVisibility
 import scala.util.Try
 import java.io.{InputStreamReader, FileInputStream, InputStream, File}
 import Utils._
+import DiaClassType._
 
 object XmlParser {
 
@@ -188,6 +189,15 @@ object XmlParserHelper {
     assertAttributeType(n, DiaObjectTypeClass)
     wrapErrorToJunction {
       val stereotype = extractDiaAttributeStringAndStrip(n, DiaAttributeStereotype)
+      val classType = stereotype match {
+        case "interface" | "trait" => Trait
+        case "enum" | "enumeration" => Enumeration
+        case "singleton" | "object" => Object
+        case "" => Class
+        case s =>
+          Log.printInfo(s"Ignoring not recognized class stereotype '$s'.")
+          Class
+      }
 
       val attributes = (extractDiaAttributesMatchingName(n, DiaAttributeAttributes) \ DiaNodeTypeComposite).map(processAttribute)
       val operations = (extractDiaAttributesMatchingName(n, DiaAttributeOperations) \ DiaNodeTypeComposite).map(processOperation)
@@ -200,7 +210,8 @@ object XmlParserHelper {
         Seq(),
         n \@ DiaAttributeId,
         attributes,
-        operations
+        operations,
+        classType
       )
     }
   }
@@ -220,12 +231,13 @@ object XmlParserHelper {
     f.copy(classes = newClasses)
   }
 
+  def createIdToClassMapping(f: DiaFile): DiaFile = f.copy(idToClass = f.classes.map { c => c.id -> c}.toMap)
+
   def semiProcessClasses(e: Elem, f: DiaFile): \/[String, DiaFile] =
     for {
       parsedClasses <- extractObjectsByType(e, DiaObjectTypeClass).map(processClass) |> liftFirstError
-      fileParsedClasses = f.copy(classes = parsedClasses)
-      filePackagedClasses = assignPackages(fileParsedClasses)
-    } yield filePackagedClasses
+    } yield f.copy(classes = parsedClasses) |>
+      assignPackages |> createIdToClassMapping
 
   def parseConnections(n: Node): (String, String) = {
     assertNodeName(n, DiaNodeTypeConnections)
@@ -245,11 +257,10 @@ object XmlParserHelper {
       val generalizations = extractObjectsByType(e, DiaObjectTypeGeneralization).map(parseGeneralization)
       Log.printDebug(s"Got ${generalizations.size} generalizations parsed: ${generalizations.map(g => g.cType.toString + ":" + g.fromId + "->" + g.toId).mkString(", ")}.")
       val startPointToGeneneralization = generalizations.map { g => g.fromId -> g}.toMap
-      val idToClass = f.classes.map { c => c.id -> c}.toMap
 
       val newClasses: Seq[DiaClass] = f.classes.map { c =>
         startPointToGeneneralization.get(c.id) match {
-          case Some(gen) => c.copy(extendsFrom = idToClass(gen.toId).name)
+          case Some(gen) => c.copy(extendsFrom = f.idToClass(gen.toId).name)
           case None => c
         }
       }
