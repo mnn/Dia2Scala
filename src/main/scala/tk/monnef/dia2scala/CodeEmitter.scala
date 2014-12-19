@@ -22,14 +22,14 @@ case class EmittedClass(name: String, inPackage: String, code: String, inFile: S
 
 object CodeEmitterHelper {
   def emitClass(c: DiaClass): EmittedClass = {
-    val intend = "  "
+    val indent = "  "
     def genClass = s"class ${c.name}"
     def genExtends = !c.extendsFrom.isEmpty ? s" extends ${c.extendsFrom}" | ""
     def genMixins = if (c.mixins.isEmpty) "" else c.mixins.mkString(" with ", " with ", "")
     def genVisibility(v: DiaVisibility) = if (v == DiaVisibility.Public) "" else v.code + " "
     def genType(t: Option[String]): String = t.map(": " + _) | ""
     def genAttributes: Seq[String] = c.attributes.map { a: DiaAttribute =>
-      intend +
+      indent +
         genVisibility(a.visibility) +
         "var " +
         a.name +
@@ -39,7 +39,7 @@ object CodeEmitterHelper {
     }
     def genParameter(p: DiaOperationParameter): String = p.name + genType(p.pType)
     def genOperations: Seq[String] = c.operations.map { o: DiaOperationDescriptor =>
-      intend +
+      indent +
         genVisibility(o.visibility) +
         "def " +
         o.name +

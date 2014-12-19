@@ -260,10 +260,11 @@ object XmlParserHelper {
 
   def processGeneralization(i: OneWayConnectionProcessorData): DiaFile =
     i.f.copy(classes = i.f.classes.map { c =>
-      if (c.name == i.c.fromId) {
-        val toClassId = i.f.idToClass(i.c.toId).name
-        if (c.extendsFrom.nonEmpty) throw new RuntimeException(s"Mulitple generalizations for class ${c.name} (${c.extendsFrom} -> $toClassId).")
-        c.copy(extendsFrom = toClassId)
+      val conn = i.c
+      if (c.id == conn.fromId) {
+        val toClassName = i.f.idToClass(conn.toId).name
+        if (c.extendsFrom.nonEmpty) throw new RuntimeException(s"Multiple generalizations for class ${c.name} (${c.extendsFrom} -> $toClassName).")
+        c.copy(extendsFrom = toClassName)
       } else c
     })
 
@@ -283,7 +284,7 @@ object XmlParserHelper {
 
   def processRealizes(i: OneWayConnectionProcessorData): DiaFile =
     i.f.copy(classes = i.f.classes.map { c =>
-      if (c.name == i.c.fromId) {
+      if (c.id == i.c.fromId) {
         val conn = i.c
         val toClassName = i.f.idToClass(conn.toId).name
         conn.cType match {
@@ -298,20 +299,24 @@ object XmlParserHelper {
 
   case class OneWayConnectionProcessorData(f: DiaFile, c: DiaOneWayConnection, fromIdToConn: Map[String, DiaOneWayConnection], toIdToConn: Map[String, DiaOneWayConnection])
 
+  def formatClassId(id: String, f: DiaFile): String = s"${f.idToClass(id).name}($id)"
+
+  def formatConnectionsSeq(s: Seq[DiaOneWayConnection], f: DiaFile): String =
+    s.map(c => c.cType + ": " + formatClassId(c.fromId, f) + " -> " + formatClassId(c.toId, f)).mkString(", ")
+
   def processOneWayConnection(n: Node, f: DiaFile, objType: String, extractor: (Node) => Option[DiaOneWayConnection], processor: (OneWayConnectionProcessorData) => DiaFile): \/[String, DiaFile] =
     wrapErrorToJunction {
       val nodes = extractObjectsByType(n, objType)
       val connections = nodes.map(extractor).filter(_.isDefined).map(_.get)
       val fromIdToConn = connections.map { c => c.fromId -> c}.toMap
       val toIdToConn = connections.map { c => c.toId -> c}.toMap
-      Log.printTrace(s"Node count: ${nodes.size}")
-      Log.printTrace(s"Connections: ${connections.map(c => c.cType + ": " + c.fromId + " -> " + c.toId).mkString(", ")}")
+      Log.printTrace(s"node count: ${nodes.size}, connections: ${formatConnectionsSeq(connections, f)}")
       connections.foldLeft(f) { (acc, item) => processor(OneWayConnectionProcessorData(acc, item, fromIdToConn, toIdToConn))}
     }
 
   def processOneWayConnections(e: Elem, f: DiaFile): \/[String, DiaFile] =
     for {
       a <- processOneWayConnection(e, f, DiaObjectTypeGeneralization, parseGeneralization, processGeneralization)
-      b <- processOneWayConnection(e, f, DiaObjectTypeRealizes, parseRealizes, processRealizes)
+      b <- processOneWayConnection(e, a, DiaObjectTypeRealizes, parseRealizes, processRealizes)
     } yield b
 }
