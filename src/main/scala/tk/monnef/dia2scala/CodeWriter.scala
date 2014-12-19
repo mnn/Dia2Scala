@@ -14,7 +14,7 @@ object CodeWriter {
       val inFileToClasses = data.classes.groupBy(_.inFile)
       for {(scFile, classes) <- inFileToClasses} {
         val c = classes.head
-        val pckgPath = path + "/" + c.inPackage.split(".").mkString("/")
+        val pckgPath = path + "/" + c.inPackage.split("\\.").mkString("/")
         new File(pckgPath).mkdirs()
         val outFile = new File(pckgPath + "/" + scFile)
         printToFile(outFile) { p =>
