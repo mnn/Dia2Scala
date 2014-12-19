@@ -28,7 +28,7 @@ object XmlParser {
          *    - handle <<enumeration>> TODO
         *     - compute package
         * - parse and process generalization
-        * - parse and process <<implements>>, <<mixin>>, <<hasA>>  TODO
+        * - parse and process <<implements>>, <<mixin>>, <<hasA>> ~ <<companionOf>>  TODO
         * - parse and process associations TODO
         */
         for {
@@ -46,6 +46,7 @@ object XmlParserHelper {
   import scalaz._
   import scalaz.syntax.std.tuple._
   import scalaz.syntax.either._
+  import scalaz.syntax.std.option._
   import Scalaz.ToIdOps
 
   final val DiaNodeTypeObject = "object"
@@ -62,6 +63,7 @@ object XmlParserHelper {
   final val DiaObjectTypePackage = "UML - LargePackage"
   final val DiaObjectTypeClass = "UML - Class"
   final val DiaObjectTypeGeneralization = "UML - Generalization"
+  final val DiaObjectTypeRealizes = "UML - Realizes"
 
   final val DiaCompositeTypeUMLAttribute = "umlattribute"
   final val DiaCompositeTypeUMLOperation = "umloperation"
@@ -251,32 +253,65 @@ object XmlParserHelper {
   def parsedConnectionIdsToOneWayConnection(connectionsIds: (String, String), cType: DiaOneWayConnectionType): DiaOneWayConnection =
     DiaOneWayConnection(connectionsIds._1, connectionsIds._2, cType)
 
-  def parseGeneralization(n: Node): DiaOneWayConnection = {
+  def parseGeneralization(n: Node): Option[DiaOneWayConnection] = {
     assertNodeObjectAndTypeAttribute(n, DiaObjectTypeGeneralization)
-    parseConnections((n \ DiaNodeTypeConnections).head) |> {parsedConnectionIdsToOneWayConnection(_, DiaGeneralizationType)}
+    parseConnections((n \ DiaNodeTypeConnections).head) |> {parsedConnectionIdsToOneWayConnection(_, DiaGeneralizationType)} |> Some.apply
   }
 
   def processGeneralization(i: OneWayConnectionProcessorData): DiaFile =
     i.f.copy(classes = i.f.classes.map { c =>
-      i.fromIdToConn.get(c.id) match {
-        case Some(gen) => c.copy(extendsFrom = i.f.idToClass(gen.toId).name)
-        case None => c
-      }
+      if (c.name == i.c.fromId) {
+        val toClassId = i.f.idToClass(i.c.toId).name
+        if (c.extendsFrom.nonEmpty) throw new RuntimeException(s"Mulitple generalizations for class ${c.name} (${c.extendsFrom} -> $toClassId).")
+        c.copy(extendsFrom = toClassId)
+      } else c
+    })
+
+  def parseRealizes(n: Node): Option[DiaOneWayConnection] = {
+    assertNodeObjectAndTypeAttribute(n, DiaObjectTypeRealizes)
+    val conn = parseConnections((n \ DiaNodeTypeConnections).head)
+    val cType: Option[DiaOneWayConnectionType] = extractDiaAttributeStringAndStrip(n, DiaAttributeStereotype) match {
+      case "" => DiaImplementsType.some
+      case "mixin" => DiaMixinType.some
+      case "hasA" | "companionOf" => DiaCompanionOfType.some
+      case s =>
+        Log.printInfo(s"Skipping unknown realizes connection: '$s'.")
+        None
+    }
+    cType.map { ct => conn |> {parsedConnectionIdsToOneWayConnection(_, ct)}}
+  }
+
+  def processRealizes(i: OneWayConnectionProcessorData): DiaFile =
+    i.f.copy(classes = i.f.classes.map { c =>
+      if (c.name == i.c.fromId) {
+        val conn = i.c
+        val toClassName = i.f.idToClass(conn.toId).name
+        conn.cType match {
+          case DiaImplementsType | DiaMixinType =>
+            if (c.extendsFrom.isEmpty) c.copy(extendsFrom = toClassName)
+            else c.copy(mixins = c.mixins :+ toClassName)
+          case DiaCompanionOfType => c
+          case t => throw new RuntimeException(s"Invalid connection type $t.")
+        }
+      } else c
     })
 
   case class OneWayConnectionProcessorData(f: DiaFile, c: DiaOneWayConnection, fromIdToConn: Map[String, DiaOneWayConnection], toIdToConn: Map[String, DiaOneWayConnection])
 
-  def processOneWayConnection(n: Node, f: DiaFile, objType: String, extractor: (Node) => DiaOneWayConnection, processor: (OneWayConnectionProcessorData) => DiaFile): \/[String, DiaFile] =
+  def processOneWayConnection(n: Node, f: DiaFile, objType: String, extractor: (Node) => Option[DiaOneWayConnection], processor: (OneWayConnectionProcessorData) => DiaFile): \/[String, DiaFile] =
     wrapErrorToJunction {
       val nodes = extractObjectsByType(n, objType)
-      val connections = nodes.map(extractor)
+      val connections = nodes.map(extractor).filter(_.isDefined).map(_.get)
       val fromIdToConn = connections.map { c => c.fromId -> c}.toMap
       val toIdToConn = connections.map { c => c.toId -> c}.toMap
+      Log.printTrace(s"Node count: ${nodes.size}")
+      Log.printTrace(s"Connections: ${connections.map(c => c.cType + ": " + c.fromId + " -> " + c.toId).mkString(", ")}")
       connections.foldLeft(f) { (acc, item) => processor(OneWayConnectionProcessorData(acc, item, fromIdToConn, toIdToConn))}
     }
 
   def processOneWayConnections(e: Elem, f: DiaFile): \/[String, DiaFile] =
     for {
       a <- processOneWayConnection(e, f, DiaObjectTypeGeneralization, parseGeneralization, processGeneralization)
-    } yield a
+      b <- processOneWayConnection(e, f, DiaObjectTypeRealizes, parseRealizes, processRealizes)
+    } yield b
 }

@@ -53,6 +53,8 @@ case object DiaImplementsType extends DiaOneWayConnectionType
 
 case object DiaMixinType extends DiaOneWayConnectionType
 
+case object DiaCompanionOfType extends DiaOneWayConnectionType
+
 object DiaVisibility extends Enumeration {
   type DiaVisibility = Value
   val Public, Private, Protected, Implementation = Value
