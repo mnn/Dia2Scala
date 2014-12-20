@@ -33,7 +33,7 @@ object CodeWriter {
   }
 
   def groupAndSortByInheritance(data: EmittedCode): Map[String, Seq[EmittedParts]] = {
-    val sortedNames: Seq[Seq[String]] = Utils.topologicalSortWithGrouping(data.dependencies.flatten)
+    val sortedNames: Seq[Seq[String]] = Utils.topologicalSortWithGrouping(data.dependencies)
     val nameToEmittedClass = data.parts.map(p => p.name -> p).toMap
     val sorted: Seq[Seq[EmittedParts]] = sortedNames.map {_.map {nameToEmittedClass(_)}}
     sorted.map { case sortedPartsSeq =>

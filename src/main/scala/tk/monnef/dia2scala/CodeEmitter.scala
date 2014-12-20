@@ -12,7 +12,7 @@ object CodeEmitter {
   def emit(file: DiaFile): \/[String, EmittedCode] = {
     EmittedCode(
       emitParts(file.classes),
-      file.classes.flatMap(c => (c.extendsFrom +: c.mixins).map((c.name, _)))
+      file.classes.flatMap(c => c.extendsFrom.toOptSeq.map((c.name, _)))
     ).right
   }
 }

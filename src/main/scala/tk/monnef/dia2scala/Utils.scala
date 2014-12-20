@@ -3,7 +3,11 @@ package tk.monnef.dia2scala
 import scala.util.control.NonFatal
 import scalaz.{\/-, -\/, \/}
 import scalaz.syntax.either._
+import scalaz.syntax.optional._
 import scalaz.syntax.std.all._
+import scalaz.Scalaz.ToIdOps
+
+//import scalaz.syntax.all._
 
 object Utils {
   def wrapErrorToJunction[A](c: => A): \/[String, A] =
@@ -40,6 +44,8 @@ object Utils {
     def capitalizeFirst: String =
       if (s.size < 1) s
       else s.take(1).toUpperCase + s.drop(1)
+
+    def toOptSeq: Seq[String] = if (s.isEmpty) Seq() else Seq(s)
   }
 
   def printToFile(f: java.io.File)(op: java.io.PrintWriter => Unit) {
@@ -53,6 +59,17 @@ object Utils {
     def -(o: T) = s.filter(_ != o)
   }
 
+  def getNodesWithMultipleOutputs[T](inputEdges: Seq[(T, T)]): Seq[(T, Seq[(T, T)])] = {
+    val sourceAndEdgeStartingFromIt: Seq[(T, Seq[(T, T)])] = for {
+      e <- inputEdges
+      from = e._1
+    } yield (from, inputEdges.filter { case (f, t) => f == from})
+    def removeNode(i: (T, Seq[(T, T)])): Seq[(T, T)] = i._2
+    val groupedSourceAndEdgeStartingFromIt: Seq[(T, Seq[(T, T)])] = sourceAndEdgeStartingFromIt.groupBy(_._1).
+      |> { grouped: Map[T, Seq[(T, Seq[(T, T)])]] => grouped.map { case (node, nodeWithEdges) => (node, nodeWithEdges.flatMap(removeNode))}.toSeq}
+    groupedSourceAndEdgeStartingFromIt.filter { case (node, edges) => edges.size > 1}
+  }
+
   def topologicalSortWithGrouping(edges: Seq[(String, String)]): Seq[Seq[String]] =
     if (edges.isEmpty) Seq()
     else {
@@ -62,7 +79,12 @@ object Utils {
       var res: Seq[Seq[String]] = sorted.map(n => Seq(n))
       var processedEdges = Seq[(String, String)]()
 
-      if (sorted.isEmpty) throw new RuntimeException(s"Nothing to sort, probably a cycle. $edges")
+      if (sorted.isEmpty) throw new RuntimeException(s"Nothing to sort - no starting node found, probably a cycle. $edges")
+
+      val multiSourceNodes = getNodesWithMultipleOutputs(edges)
+      if (multiSourceNodes.nonEmpty) {
+        throw new RuntimeException(s"Found multiple outputs from a single node, cannot proceed. $multiSourceNodes")
+      }
 
       while (nonSorted.nonEmpty) {
         for {
@@ -84,7 +106,9 @@ object Utils {
           }
         }
       }
-      if (processedEdges.toSet != edges.toSet) throw new RuntimeException(s"Not all edges traversed, look like a cycle. Not used: ${edges diff processedEdges}")
+      if (processedEdges.toSet != edges.toSet) {
+        throw new RuntimeException(s"Not all edges traversed, looks like a cycle. Not used: ${edges diff processedEdges}")
+      }
 
       res
     }
