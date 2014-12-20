@@ -8,10 +8,14 @@ import Scalaz._
 import Utils._
 
 object CodeWriter {
-  def writeTextFile(data: EmittedCode, path: String): \/[String, CodeWriterSuccess.type] = {
+  def writeTextFile(data: EmittedCode, path: String, groupByDependency: Boolean): \/[String, CodeWriterSuccess.type] = {
     try {
       new File(path).mkdirs()
-      val inFileToClasses = data.classes.groupBy(_.inFile)
+
+      val inFileToClasses =
+        if (!groupByDependency) data.parts.groupBy(_.inFile)
+        else groupAndSortByInheritance(data)
+
       for {(scFile, classes) <- inFileToClasses} {
         val c = classes.head
         val pckgPath = path + "/" + c.inPackage.split("\\.").mkString("/")
@@ -26,6 +30,16 @@ object CodeWriter {
     } catch {
       case NonFatal(e) => e.getMessage.left
     }
+  }
+
+  def groupAndSortByInheritance(data: EmittedCode): Map[String, Seq[EmittedParts]] = {
+    val sortedNames: Seq[Seq[String]] = Utils.topologicalSortWithGrouping(data.dependencies.flatten)
+    val nameToEmittedClass = data.parts.map(p => p.name -> p).toMap
+    val sorted: Seq[Seq[EmittedParts]] = sortedNames.map {_.map {nameToEmittedClass(_)}}
+    sorted.map { case sortedPartsSeq =>
+      val masterPartFileName = sortedPartsSeq.head.inFile
+      (masterPartFileName, sortedPartsSeq.map {_.copy(inFile = masterPartFileName)})
+    }.toMap
   }
 }
 

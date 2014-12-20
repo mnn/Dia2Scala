@@ -49,6 +49,43 @@ object Utils {
 
   implicit class SeqPimps[T](s: Seq[T]) {
     def dropWhileRight(p: T => Boolean): Seq[T] = s.reverse.dropWhile(p).reverse
+
+    def -(o: T) = s.filter(_ != o)
   }
 
+  def topologicalSortWithGrouping(edges: Seq[(String, String)]): Seq[Seq[String]] =
+    if (edges.isEmpty) Seq()
+    else {
+      val nodes = edges.flatMap(e => Seq(e._1, e._2)).distinct
+      var sorted = nodes.filter(n => !edges.exists { case (from, to) => from == n})
+      var nonSorted = nodes diff sorted
+      var res: Seq[Seq[String]] = sorted.map(n => Seq(n))
+      var processedEdges = Seq[(String, String)]()
+
+      if (sorted.isEmpty) throw new RuntimeException(s"Nothing to sort, probably a cycle. $edges")
+
+      while (nonSorted.nonEmpty) {
+        for {
+          currNode <- sorted
+          children = edges.filter { case (from, to) => to == currNode}.map(_._1)
+          childrenNotSorted = children.filter(!sorted.contains(_))
+        } {
+          for {child <- childrenNotSorted} {
+            val curRoute = child -> currNode
+            if (processedEdges.contains(curRoute)) throw new RuntimeException(s"Detected cycle, halting ($curRoute).")
+            sorted :+= child
+            nonSorted -= child
+            res = res.map { case resChain =>
+              if (resChain.contains(currNode)) {
+                resChain :+ child
+              } else resChain
+            }
+            processedEdges :+= curRoute
+          }
+        }
+      }
+      if (processedEdges.toSet != edges.toSet) throw new RuntimeException(s"Not all edges traversed, look like a cycle. Not used: ${edges diff processedEdges}")
+
+      res
+    }
 }

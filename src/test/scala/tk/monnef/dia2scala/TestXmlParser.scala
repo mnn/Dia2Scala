@@ -103,11 +103,12 @@ class TestXmlParser extends FlatSpec {
   "processGeneralization" should "process a generalization" in {
     val classIdFrom = "idFrom"
     val classIdTo = "idTo"
-    val classFrom = DiaClass("from", DiaGeometry(0, 0, 1, 1), "", "", Seq(), classIdFrom, Seq(), Seq(), DiaClassType.Class)
-    val f = DiaFile(Seq(), Seq(classFrom), Map(classIdFrom -> classFrom))
+    val classFrom = DiaClass("fromName", DiaGeometry(-1, -2, 1, 1), "", "", Seq(), classIdFrom, Seq(), Seq(), DiaClassType.Class)
+    val classTo = DiaClass("toName", DiaGeometry(2, 3, 5, 5), "", "", Seq(), classIdTo, Seq(), Seq(), DiaClassType.Class)
+    val f = DiaFile(Seq(), Seq(classFrom, classTo), Map(classIdFrom -> classFrom, classIdTo -> classTo))
     val geneConn = DiaOneWayConnection(classIdFrom, classIdTo, DiaGeneralizationType)
     val res = XmlParserHelper.processGeneralization(OneWayConnectionProcessorData(f, geneConn, Map(classIdFrom -> geneConn), Map(classIdTo -> geneConn)))
-    assert(res.classes.head.extendsFrom == classIdTo)
+    assert(res.classes.head.extendsFrom == classTo.name)
   }
 
   final val xmlRealises = "    <dia:object type=\"UML - Realizes\" version=\"1\" id=\"O17\">\n      <dia:attribute name=\"obj_pos\">\n        <dia:point val=\"14.9825,32.0504\"/>\n      </dia:attribute>\n      <dia:attribute name=\"obj_bb\">\n        <dia:rectangle val=\"14.1325,32.0004;17.7263,36\"/>\n      </dia:attribute>\n      <dia:attribute name=\"meta\">\n        <dia:composite type=\"dict\"/>\n      </dia:attribute>\n      <dia:attribute name=\"orth_points\">\n        <dia:point val=\"14.9825,32.0504\"/>\n        <dia:point val=\"14.9825,34.4\"/>\n        <dia:point val=\"17.6763,34.4\"/>\n        <dia:point val=\"17.6763,35.9495\"/>\n      </dia:attribute>\n      <dia:attribute name=\"orth_orient\">\n        <dia:enum val=\"1\"/>\n        <dia:enum val=\"0\"/>\n        <dia:enum val=\"1\"/>\n      </dia:attribute>\n      <dia:attribute name=\"orth_autoroute\">\n        <dia:boolean val=\"true\"/>\n      </dia:attribute>\n      <dia:attribute name=\"line_colour\">\n        <dia:color val=\"#000000\"/>\n      </dia:attribute>\n      <dia:attribute name=\"text_colour\">\n        <dia:color val=\"#000000\"/>\n      </dia:attribute>\n      <dia:attribute name=\"name\">\n        <dia:string>##</dia:string>\n      </dia:attribute>\n      <dia:attribute name=\"stereotype\">\n        <dia:string>##</dia:string>\n      </dia:attribute>\n      <dia:connections>\n        <dia:connection handle=\"0\" to=\"O13\" connection=\"8\"/>\n        <dia:connection handle=\"1\" to=\"O16\" connection=\"10\"/>\n      </dia:connections>\n      <dia:childnode parent=\"O5\"/>\n    </dia:object>"

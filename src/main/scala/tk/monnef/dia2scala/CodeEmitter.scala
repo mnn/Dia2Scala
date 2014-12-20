@@ -11,17 +11,18 @@ object CodeEmitter {
 
   def emit(file: DiaFile): \/[String, EmittedCode] = {
     EmittedCode(
-      emitClasses(file.classes)
+      emitParts(file.classes),
+      file.classes.flatMap(c => (c.extendsFrom +: c.mixins).map((c.name, _)))
     ).right
   }
 }
 
-case class EmittedCode(classes: Seq[EmittedClass])
+case class EmittedCode(parts: Seq[EmittedParts], dependencies: Seq[(String, String)])
 
-case class EmittedClass(name: String, inPackage: String, code: String, inFile: String)
+case class EmittedParts(name: String, inPackage: String, code: String, inFile: String)
 
 object CodeEmitterHelper {
-  def emitClass(c: DiaClass): EmittedClass = {
+  def emitClass(c: DiaClass): EmittedParts = {
     val indent = "  "
     def genClass = s"class ${c.name}"
     def genExtends = !c.extendsFrom.isEmpty ? s" extends ${c.extendsFrom}" | ""
@@ -63,7 +64,7 @@ object CodeEmitterHelper {
       addLine("}").
       convertToString
 
-    EmittedClass(
+    EmittedParts(
       c.name,
       c.inPackage,
       code,
@@ -71,7 +72,7 @@ object CodeEmitterHelper {
     )
   }
 
-  def emitClasses(cs: Seq[DiaClass]): Seq[EmittedClass] = cs map emitClass
+  def emitParts(cs: Seq[DiaClass]): Seq[EmittedParts] = cs map emitClass
 }
 
 class CodeBuilder {

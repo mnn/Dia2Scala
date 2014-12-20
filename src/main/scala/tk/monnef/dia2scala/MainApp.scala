@@ -22,7 +22,7 @@ object MainApp extends App {
     (for {
       parsedFile <- XmlParser.parseFile(config.file, config.unpack)
       code <- CodeEmitter.emit(parsedFile)
-      result <- CodeWriter.writeTextFile(code, config.outputPath)
+      result <- CodeWriter.writeTextFile(code, config.outputPath, config.groupByDependency)
     } yield result).
       fold(
         err => {printCritical(err); 2},

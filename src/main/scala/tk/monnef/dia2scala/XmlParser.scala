@@ -262,7 +262,10 @@ object XmlParserHelper {
     i.f.copy(classes = i.f.classes.map { c =>
       val conn = i.c
       if (c.id == conn.fromId) {
-        val toClassName = i.f.idToClass(conn.toId).name
+        val toClassName = i.f.idToClass.get(conn.toId) match {
+          case Some(cl) => cl.name
+          case None => throw new RuntimeException(s"Unable to find target class ${formatClassId(conn.toId, i.f)} of ${formatConnection(conn, i.f)}")
+        }
         if (c.extendsFrom.nonEmpty) throw new RuntimeException(s"Multiple generalizations for class ${c.name} (${c.extendsFrom} -> $toClassName).")
         c.copy(extendsFrom = toClassName)
       } else c
@@ -299,10 +302,11 @@ object XmlParserHelper {
 
   case class OneWayConnectionProcessorData(f: DiaFile, c: DiaOneWayConnection, fromIdToConn: Map[String, DiaOneWayConnection], toIdToConn: Map[String, DiaOneWayConnection])
 
-  def formatClassId(id: String, f: DiaFile): String = s"${f.idToClass(id).name}($id)"
+  def formatClassId(id: String, f: DiaFile): String = s"${f.idToClass.get(id).map(_.name).getOrElse("<Class not found>")}($id)"
 
-  def formatConnectionsSeq(s: Seq[DiaOneWayConnection], f: DiaFile): String =
-    s.map(c => c.cType + ": " + formatClassId(c.fromId, f) + " -> " + formatClassId(c.toId, f)).mkString(", ")
+  def formatConnection(c: DiaOneWayConnection, f: DiaFile): String = c.cType + ": " + formatClassId(c.fromId, f) + " -> " + formatClassId(c.toId, f)
+
+  def formatConnectionsSeq(s: Seq[DiaOneWayConnection], f: DiaFile): String = s.map(formatConnection(_, f)).mkString(", ")
 
   def processOneWayConnection(n: Node, f: DiaFile, objType: String, extractor: (Node) => Option[DiaOneWayConnection], processor: (OneWayConnectionProcessorData) => DiaFile): \/[String, DiaFile] =
     wrapErrorToJunction {
