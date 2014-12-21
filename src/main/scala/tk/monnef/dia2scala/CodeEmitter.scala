@@ -12,7 +12,7 @@ object CodeEmitter {
   def emit(file: DiaFile): \/[String, EmittedCode] = {
     EmittedCode(
       emitParts(file.classes),
-      file.classes.flatMap(c => c.extendsFrom.toOptSeq.map((c.name, _)))
+      file.classes.flatMap(c => c.extendsFrom.map(e => (c.ref.name, e.fullName)))
     ).right
   }
 }
@@ -24,11 +24,11 @@ case class EmittedParts(name: String, inPackage: String, code: String, inFile: S
 object CodeEmitterHelper {
   def emitClass(c: DiaClass): EmittedParts = {
     val indent = "  "
-    def genClass = s"class ${c.name}"
-    def genExtends = !c.extendsFrom.isEmpty ? s" extends ${c.extendsFrom}" | ""
+    def genClass = s"class ${c.ref.name}"
+    def genExtends = c.extendsFrom.nonEmpty ? s" extends ${c.extendsFrom.get.fullName}" | ""
     def genMixins = if (c.mixins.isEmpty) "" else c.mixins.mkString(" with ", " with ", "")
     def genVisibility(v: DiaVisibility) = if (v == DiaVisibility.Public) "" else v.code + " "
-    def genType(t: Option[String]): String = t.map(": " + _) | ""
+    def genType(t: Option[\/[String, DiaClassRef]]): String = t.map(j => {": " + j.bimap(a => a, _.fullName).get}).getOrElse("")
     def genAttributes: Seq[String] = c.attributes.map { a: DiaAttribute =>
       indent +
         genVisibility(a.visibility) +
@@ -51,8 +51,7 @@ object CodeEmitterHelper {
         ""
     }
 
-    val dnl = "\n\n"
-    val nl = "\n"
+    // TODO: import generation
 
     val code = (new CodeBuilder).
       addLine(genClass + genExtends + genMixins + " {").
@@ -65,10 +64,10 @@ object CodeEmitterHelper {
       convertToString
 
     EmittedParts(
-      c.name,
-      c.inPackage,
+      c.ref.name,
+      c.ref.inPackage,
       code,
-      c.name.capitalizeFirst + ".scala"
+      c.ref.name.capitalizeFirst + ".scala"
     )
   }
 

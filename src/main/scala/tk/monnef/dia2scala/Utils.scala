@@ -112,4 +112,12 @@ object Utils {
 
       res
     }
+
+  implicit class JunctionPimps[A](j: \/[A, A]) {
+    def get: A = j match {
+      case -\/(a) => a
+      case \/-(a) => a
+    }
+  }
+
 }
