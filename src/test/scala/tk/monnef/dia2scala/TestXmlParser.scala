@@ -1,6 +1,7 @@
 package tk.monnef.dia2scala
 
 import java.io.File
+import tk.monnef.dia2scala.DiaFile.{createUncheckedClassRef, createScalaClassRefOptLeft, createUncheckedClassRefOptRight}
 import tk.monnef.dia2scala.XmlParserHelper.OneWayConnectionProcessorData
 
 import scalaz._
@@ -48,8 +49,8 @@ class TestXmlParser extends FlatSpec {
     rightOrFailIn(parsePacked("simple01")) { res =>
       assert(res.packages.size == 1)
       assert(res.classes.size == 2, res.classes)
-      assert(res.classes.find(_.name == "ClassA").get.inPackage == "")
-      assert(res.classes.find(_.name == "ClassB").get.inPackage == "packageB")
+      assert(res.classes.find(_.ref.name == "ClassA").get.ref.inPackage == "")
+      assert(res.classes.find(_.ref.name == "ClassB").get.ref.inPackage == "packageB")
     }
   }
 
@@ -62,7 +63,7 @@ class TestXmlParser extends FlatSpec {
   }
 
   final val xmlAttribute = "       <dia:composite type=\"umlattribute\">\n          <dia:attribute name=\"name\">\n            <dia:string>#aReference#</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"type\">\n            <dia:string>#ClassA#</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"value\">\n            <dia:string>##</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"comment\">\n            <dia:string>##</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"visibility\">\n            <dia:enum val=\"2\"/>\n          </dia:attribute>\n          <dia:attribute name=\"abstract\">\n            <dia:boolean val=\"false\"/>\n          </dia:attribute>\n          <dia:attribute name=\"class_scope\">\n            <dia:boolean val=\"false\"/>\n          </dia:attribute> </dia:composite>"
-  final val expectedAttributeA = DiaAttribute("aReference", Some("ClassA"), DiaVisibility.Protected)
+  final val expectedAttributeA = DiaAttribute("aReference", createUncheckedClassRefOptRight("ClassA"), DiaVisibility.Protected)
   "processAttribute" should "process an attribute" in {
     val elem = xml.XML.loadString(xmlAttribute)
     val res = XmlParserHelper.processAttribute(elem)
@@ -70,7 +71,7 @@ class TestXmlParser extends FlatSpec {
   }
 
   final val xmlOperation = "        <dia:composite type=\"umloperation\">\n          <dia:attribute name=\"name\">\n            <dia:string>#stringToInt#</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"stereotype\">\n            <dia:string>##</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"type\">\n            <dia:string>#Int#</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"visibility\">\n            <dia:enum val=\"0\"/>\n          </dia:attribute>\n          <dia:attribute name=\"comment\">\n            <dia:string>##</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"abstract\">\n            <dia:boolean val=\"false\"/>\n          </dia:attribute>\n          <dia:attribute name=\"inheritance_type\">\n            <dia:enum val=\"2\"/>\n          </dia:attribute>\n          <dia:attribute name=\"query\">\n            <dia:boolean val=\"false\"/>\n          </dia:attribute>\n          <dia:attribute name=\"class_scope\">\n            <dia:boolean val=\"false\"/>\n          </dia:attribute>\n          <dia:attribute name=\"parameters\">\n            <dia:composite type=\"umlparameter\">\n              <dia:attribute name=\"name\">\n                <dia:string>#str#</dia:string>\n              </dia:attribute>\n              <dia:attribute name=\"type\">\n                <dia:string>#String#</dia:string>\n              </dia:attribute>\n              <dia:attribute name=\"value\">\n                <dia:string>##</dia:string>\n              </dia:attribute>\n              <dia:attribute name=\"comment\">\n                <dia:string>##</dia:string>\n              </dia:attribute>\n              <dia:attribute name=\"kind\">\n                <dia:enum val=\"0\"/>\n              </dia:attribute>\n            </dia:composite>\n          </dia:attribute>\n        </dia:composite>"
-  final val expectedOperation = DiaOperationDescriptor("stringToInt", DiaVisibility.Public, Seq(DiaOperationParameter("str", "String".some)), "Int".some)
+  final val expectedOperation = DiaOperationDescriptor("stringToInt", DiaVisibility.Public, Seq(DiaOperationParameter("str", createScalaClassRefOptLeft("String"))), createScalaClassRefOptLeft("Int"))
   "processOperation" should "process an operation" in {
     val elem = xml.XML.loadString(xmlOperation)
     val res = XmlParserHelper.processOperation(elem)
@@ -81,7 +82,7 @@ class TestXmlParser extends FlatSpec {
   "processClass" should "process a class" in {
     val elem = xml.XML.loadString(xmlClass)
     rightOrFailIn(XmlParserHelper.processClass(elem)) { res =>
-      assert(res == DiaClass("ClassB", DiaGeometry(13, 3, 11.665000000000001, 3.3999999999999999), "", "", Seq(), "O2", Seq(expectedAttributeA), Seq(expectedOperation), DiaClassType.Class))
+      assert(res == DiaClass(createUncheckedClassRef("ClassB"), DiaGeometry(13, 3, 11.665000000000001, 3.3999999999999999), None, Seq(), "O2", Seq(expectedAttributeA), Seq(expectedOperation), DiaClassType.Class))
     }
   }
 
@@ -103,12 +104,12 @@ class TestXmlParser extends FlatSpec {
   "processGeneralization" should "process a generalization" in {
     val classIdFrom = "idFrom"
     val classIdTo = "idTo"
-    val classFrom = DiaClass("fromName", DiaGeometry(-1, -2, 1, 1), "", "", Seq(), classIdFrom, Seq(), Seq(), DiaClassType.Class)
-    val classTo = DiaClass("toName", DiaGeometry(2, 3, 5, 5), "", "", Seq(), classIdTo, Seq(), Seq(), DiaClassType.Class)
+    val classFrom = DiaClass(createUncheckedClassRef("fromName"), DiaGeometry(-1, -2, 1, 1), None, Seq(), classIdFrom, Seq(), Seq(), DiaClassType.Class)
+    val classTo = DiaClass(createUncheckedClassRef("toName"), DiaGeometry(2, 3, 5, 5), None, Seq(), classIdTo, Seq(), Seq(), DiaClassType.Class)
     val f = DiaFile(Seq(), Seq(classFrom, classTo), Map(classIdFrom -> classFrom, classIdTo -> classTo))
     val geneConn = DiaOneWayConnection(classIdFrom, classIdTo, DiaGeneralizationType)
     val res = XmlParserHelper.processGeneralization(OneWayConnectionProcessorData(f, geneConn, Map(classIdFrom -> geneConn), Map(classIdTo -> geneConn)))
-    assert(res.classes.head.extendsFrom == classTo.name)
+    assert(res.classes.head.extendsFrom.get == classTo.ref)
   }
 
   final val xmlRealises = "    <dia:object type=\"UML - Realizes\" version=\"1\" id=\"O17\">\n      <dia:attribute name=\"obj_pos\">\n        <dia:point val=\"14.9825,32.0504\"/>\n      </dia:attribute>\n      <dia:attribute name=\"obj_bb\">\n        <dia:rectangle val=\"14.1325,32.0004;17.7263,36\"/>\n      </dia:attribute>\n      <dia:attribute name=\"meta\">\n        <dia:composite type=\"dict\"/>\n      </dia:attribute>\n      <dia:attribute name=\"orth_points\">\n        <dia:point val=\"14.9825,32.0504\"/>\n        <dia:point val=\"14.9825,34.4\"/>\n        <dia:point val=\"17.6763,34.4\"/>\n        <dia:point val=\"17.6763,35.9495\"/>\n      </dia:attribute>\n      <dia:attribute name=\"orth_orient\">\n        <dia:enum val=\"1\"/>\n        <dia:enum val=\"0\"/>\n        <dia:enum val=\"1\"/>\n      </dia:attribute>\n      <dia:attribute name=\"orth_autoroute\">\n        <dia:boolean val=\"true\"/>\n      </dia:attribute>\n      <dia:attribute name=\"line_colour\">\n        <dia:color val=\"#000000\"/>\n      </dia:attribute>\n      <dia:attribute name=\"text_colour\">\n        <dia:color val=\"#000000\"/>\n      </dia:attribute>\n      <dia:attribute name=\"name\">\n        <dia:string>##</dia:string>\n      </dia:attribute>\n      <dia:attribute name=\"stereotype\">\n        <dia:string>##</dia:string>\n      </dia:attribute>\n      <dia:connections>\n        <dia:connection handle=\"0\" to=\"O13\" connection=\"8\"/>\n        <dia:connection handle=\"1\" to=\"O16\" connection=\"10\"/>\n      </dia:connections>\n      <dia:childnode parent=\"O5\"/>\n    </dia:object>"

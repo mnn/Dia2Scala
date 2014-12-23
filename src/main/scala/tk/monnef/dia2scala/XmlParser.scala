@@ -1,6 +1,7 @@
 package tk.monnef.dia2scala
 
 import java.util.zip.GZIPInputStream
+import tk.monnef.dia2scala.DiaFile.convertTypeWithoutClassExistenceChecks
 import tk.monnef.dia2scala.DiaVisibility.DiaVisibility
 
 import scala.util.Try
@@ -167,7 +168,7 @@ object XmlParserHelper {
     assertAttributeType(n, DiaCompositeTypeUMLAttribute)
     DiaAttribute(
       extractAttributeName(n),
-      extractDiaAttributeStringAndStrip(n, DiaAttributeType) |> wrapNonEmptyStringToSome,
+      extractDiaAttributeStringAndStrip(n, DiaAttributeType) |> convertTypeWithoutClassExistenceChecks,
       extractVisibility(n)
     )
   }
@@ -176,7 +177,7 @@ object XmlParserHelper {
     assertAttributeType(n, DiaCompositeTypeUMLParameter)
     DiaOperationParameter(
       extractAttributeName(n),
-      extractDiaAttributeStringAndStrip(n, DiaAttributeType) |> wrapNonEmptyStringToSome
+      extractDiaAttributeStringAndStrip(n, DiaAttributeType) |> convertTypeWithoutClassExistenceChecks
     )
   }
 
@@ -186,7 +187,7 @@ object XmlParserHelper {
       extractAttributeName(n),
       extractVisibility(n),
       (extractDiaAttributeByName(n, DiaAttributeParameters) \ DiaNodeTypeComposite).map(processParameter),
-      extractDiaAttributeStringAndStrip(n, DiaAttributeType) |> wrapNonEmptyStringToSome
+      extractDiaAttributeStringAndStrip(n, DiaAttributeType) |> convertTypeWithoutClassExistenceChecks
     )
   }
 
@@ -208,10 +209,9 @@ object XmlParserHelper {
       val operations = (extractDiaAttributesMatchingName(n, DiaAttributeOperations) \ DiaNodeTypeComposite).map(processOperation)
 
       DiaClass(
-        extractAttributeName(n),
+        extractAttributeName(n) |> DiaFile.createUncheckedClassRef,
         extractGeometry(n),
-        "",
-        "",
+        None,
         Seq(),
         n \@ DiaAttributeId,
         attributes,
@@ -230,7 +230,7 @@ object XmlParserHelper {
 
   def assignPackages(f: DiaFile): DiaFile = {
     val newClasses = f.classes map { c =>
-      c.copy(inPackage = getPackageForClass(f, c).map(_.name).getOrElse(""))
+      c.copy(ref = c.ref.copy(inPackage = getPackageForClass(f, c).map(_.name).getOrElse("")))
     }
     assert(newClasses.size == f.classes.size)
     f.copy(classes = newClasses)
@@ -262,12 +262,12 @@ object XmlParserHelper {
     i.f.copy(classes = i.f.classes.map { c =>
       val conn = i.c
       if (c.id == conn.fromId) {
-        val toClassName = i.f.idToClass.get(conn.toId) match {
-          case Some(cl) => cl.name
+        val toClassRef = i.f.idToClass.get(conn.toId) match {
+          case Some(cl) => cl.ref
           case None => throw new RuntimeException(s"Unable to find target class ${formatClassId(conn.toId, i.f)} of ${formatConnection(conn, i.f)}")
         }
-        if (c.extendsFrom.nonEmpty) throw new RuntimeException(s"Multiple generalizations for class ${c.name} (${c.extendsFrom} -> $toClassName).")
-        c.copy(extendsFrom = toClassName)
+        if (c.extendsFrom.nonEmpty) throw new RuntimeException(s"Multiple generalizations for class ${c.ref} (${c.extendsFrom} -> ${toClassRef.fullName}).")
+        c.copy(extendsFrom = toClassRef.some)
       } else c
     })
 
@@ -289,11 +289,11 @@ object XmlParserHelper {
     i.f.copy(classes = i.f.classes.map { c =>
       if (c.id == i.c.fromId) {
         val conn = i.c
-        val toClassName = i.f.idToClass(conn.toId).name
+        val toClassRef = i.f.idToClass(conn.toId).ref
         conn.cType match {
           case DiaImplementsType | DiaMixinType =>
-            if (c.extendsFrom.isEmpty) c.copy(extendsFrom = toClassName)
-            else c.copy(mixins = c.mixins :+ toClassName)
+            if (c.extendsFrom.isEmpty) c.copy(extendsFrom = toClassRef.some)
+            else c.copy(mixins = c.mixins :+ toClassRef)
           case DiaCompanionOfType => c
           case t => throw new RuntimeException(s"Invalid connection type $t.")
         }
@@ -302,7 +302,7 @@ object XmlParserHelper {
 
   case class OneWayConnectionProcessorData(f: DiaFile, c: DiaOneWayConnection, fromIdToConn: Map[String, DiaOneWayConnection], toIdToConn: Map[String, DiaOneWayConnection])
 
-  def formatClassId(id: String, f: DiaFile): String = s"${f.idToClass.get(id).map(_.name).getOrElse("<Class not found>")}($id)"
+  def formatClassId(id: String, f: DiaFile): String = s"${f.idToClass.get(id).map(_.ref.fullName).getOrElse("<Class not found>")}($id)"
 
   def formatConnection(c: DiaOneWayConnection, f: DiaFile): String = c.cType + ": " + formatClassId(c.fromId, f) + " -> " + formatClassId(c.toId, f)
 

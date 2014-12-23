@@ -20,8 +20,7 @@ case class DiaFile(packages: Seq[DiaPackage], classes: Seq[DiaClass], idToClass:
   }
 
   def findClass(fullName: String): Option[DiaClass] = {
-    val (pck, cName) = fullName.split("\\.") |> { a => (a.init.mkString("."), a.last)}
-    findClass(pck, cName)
+    findClass(createUncheckedClassRef(fullName))
   }
 
   def findClass(inPackage: String, name: String): Option[DiaClass] = {
@@ -45,11 +44,23 @@ case class DiaFile(packages: Seq[DiaPackage], classes: Seq[DiaClass], idToClass:
     }
   }
 
-  def isScalaClass(n: String): Boolean = ScalaClasses.contains(n)
 }
 
 object DiaFile {
   def apply(): DiaFile = DiaFile(Seq(), Seq(), Map())
+
+  def createUncheckedClassRef(i: String): DiaClassRef = i.split("\\.") |> { a => (a.last, a.init.mkString("."))} |> { case (name, pck) => DiaClassRef(name, pck)}
+
+  def createUncheckedClassRefOptRight(i: String): Option[\/[String, DiaClassRef]] = createUncheckedClassRef(i).right.some
+
+  def createScalaClassRefOptLeft(i: String): Option[\/[String, DiaClassRef]] = if (isScalaClass(i)) i.left.some else None
+
+  def isScalaClass(n: String): Boolean = ScalaClasses.contains(n)
+
+  def convertTypeWithoutClassExistenceChecks(i: String): Option[\/[String, DiaClassRef]] = {
+    if (isScalaClass(i)) i.left.some
+    else createUncheckedClassRef(i).right.some
+  }
 
   def generateSeqIfTrue[T](cond: Boolean, msg: T): Seq[T] = if (cond) Seq(msg) else Seq()
 
@@ -86,7 +97,7 @@ object DiaFile {
         f.classes.map(c => {
           c.attributes.filter(a => a.aType.nonEmpty).flatMap(a => {
             a.aType.get match {
-              case -\/(sc) => if (f.isScalaClass(sc)) Seq() else Seq(s"Type $sc of attribute ${a.name} in ${c.ref.name} is not a Scala class.")
+              case -\/(sc) => if (isScalaClass(sc)) Seq() else Seq(s"Type $sc of attribute ${a.name} in ${c.ref.name} is not a Scala class.")
               case \/-(ref) => if (f.classExists(ref)) Seq() else Seq(s"Class ${ref.name} of attribute ${a.name} in ${c.ref.name} not found.")
             }
           })
@@ -98,7 +109,7 @@ object DiaFile {
           if o.oType.isDefined
           t = o.oType.get
         } yield t match {
-          case -\/(sc) => if (f.isScalaClass(sc)) Seq() else Seq(s"Return type $sc of operations ${o.name} in ${c.ref.name} is not a Scala class.")
+          case -\/(sc) => if (isScalaClass(sc)) Seq() else Seq(s"Return type $sc of operations ${o.name} in ${c.ref.name} is not a Scala class.")
           case \/-(ref) => if (f.classExists(ref)) Seq() else Seq(s"Return type ${ref.name} of operation ${o.name} in ${c.ref.name} not found.")
         }
       }: Seq[Seq[String]]) ++ {
@@ -109,7 +120,7 @@ object DiaFile {
           if p.pType.isDefined
           t = p.pType.get
         } yield t match {
-            case -\/(sc) => if (f.isScalaClass(sc)) Seq() else Seq(s"Type $sc of parameter ${p.name} of operations ${o.name} in ${c.ref.name} is not a Scala class.")
+            case -\/(sc) => if (isScalaClass(sc)) Seq() else Seq(s"Type $sc of parameter ${p.name} of operations ${o.name} in ${c.ref.name} is not a Scala class.")
             case \/-(ref) => if (f.classExists(ref)) Seq() else Seq(s"Type ${ref.name} of parameter ${p.name} of operation ${o.name} in ${c.ref.name} not found.")
           }): Seq[Seq[String]]
       }
@@ -182,24 +193,3 @@ case object DiaMixinType extends DiaOneWayConnectionType
 
 case object DiaCompanionOfType extends DiaOneWayConnectionType
 
-object DiaVisibility extends Enumeration {
-  type DiaVisibility = Value
-  val Public, Private, Protected, Implementation = Value
-
-  final val dvToCode = Map(
-    Public -> "public",
-    Private -> "private",
-    Protected -> "protected",
-    Implementation -> "???"
-  )
-
-  implicit class DiaVisibilityPimps(val dv: DiaVisibility) {
-    def code: String = dvToCode(dv)
-  }
-
-}
-
-object DiaClassType extends Enumeration {
-  type DiaClassType = Value
-  val Class, Enumeration, Trait, Object = Value
-}
