@@ -70,7 +70,7 @@ class TestXmlParser extends FlatSpec {
   final val expectedAttributeA = DiaAttribute("aReference", createUncheckedClassRefOptRight("ClassA"), DiaVisibility.Protected, true, None)
   "processAttribute" should "process an attribute" in {
     val elem = xml.XML.loadString(xmlAttribute)
-    val res = XmlParserHelper.processAttribute(elem)
+    val res = XmlParserHelper.processAttribute(elem, None)
     assert(res == expectedAttributeA)
   }
 
@@ -78,7 +78,7 @@ class TestXmlParser extends FlatSpec {
   final val expectedAttributeValAttr = DiaAttribute("valAttr", None, DiaVisibility.Public, true, "defaultValValue".some)
   it should "process an attribute with default value and tagged with <<val>>" in {
     val elem = xml.XML.loadString(xmlAttributeWithVal)
-    val res = XmlParserHelper.processAttribute(elem)
+    val res = XmlParserHelper.processAttribute(elem, true.some)
     assert(res == expectedAttributeValAttr)
   }
 
@@ -86,7 +86,7 @@ class TestXmlParser extends FlatSpec {
   final val expectedAttributeVarAttr = DiaAttribute("varAttr", createScalaClassRefOptLeft("String"), DiaVisibility.Private, false, "\"sss\"".some)
   it should "process an attribute with default value and tagged with <<var>>" in {
     val elem = xml.XML.loadString(xmlAttributeWithVar)
-    val res = XmlParserHelper.processAttribute(elem)
+    val res = XmlParserHelper.processAttribute(elem, false.some)
     assert(res == expectedAttributeVarAttr)
   }
 
@@ -137,5 +137,20 @@ class TestXmlParser extends FlatSpec {
     val elem = xml.XML.loadString(xmlRealises)
     val res = XmlParserHelper.parseRealizes(elem)
     assert(res == DiaOneWayConnection("O16", "O13", DiaImplementsType).some)
+  }
+
+  "ensureAttributeObeysClassStereotypes" should "crash on invalid combinations" in {
+    import XmlParserHelper.ensureAttributeObeysClassStereotypes
+    intercept[RuntimeException] {ensureAttributeObeysClassStereotypes("val", false.some, "attr")}
+    intercept[RuntimeException] {ensureAttributeObeysClassStereotypes("var", true.some, "attr")}
+  }
+
+  it should "not crash on valid combinations" in {
+    import XmlParserHelper.ensureAttributeObeysClassStereotypes
+    ensureAttributeObeysClassStereotypes("val", true.some, "attr")
+    ensureAttributeObeysClassStereotypes("var", false.some, "attr")
+
+    ensureAttributeObeysClassStereotypes("val", None, "attr")
+    ensureAttributeObeysClassStereotypes("val", None, "attr")
   }
 }

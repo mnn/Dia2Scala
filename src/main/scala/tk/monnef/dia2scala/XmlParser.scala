@@ -166,9 +166,20 @@ object XmlParserHelper {
   def extractAttributeName(n: Node): String = extractDiaAttributeStringAndStrip(n, DiaAttributeName)
 
   val AttributeStereotypesPattern = "^<<([a-zA-Z ,]+)>>\\s*([a-zA-Z0-9]+)\\s*$".r
-  val ValidAttrStereos = Seq("val", "var")
+  val AttrStereoVal = "val"
+  val AttrStereoVar = "var"
+  val ValidAttrStereos = Seq(AttrStereoVal, AttrStereoVar)
 
-  def processAttribute(n: Node): DiaAttribute = {
+  def ensureAttributeObeysClassStereotypes(attrStereo: String, isClassVal: Option[Boolean], attrName: String) {
+    if (isClassVal.isDefined) {
+      val attrIsVal = attrStereo == AttrStereoVal
+      if (isClassVal.get != attrIsVal) {
+        throw new RuntimeException(s"'$attrName': Attribute and class stereotype aren't compatible.")
+      }
+    }
+  }
+
+  def processAttribute(n: Node, isClassVal: Option[Boolean]): DiaAttribute = {
     assertAttributeType(n, DiaCompositeTypeUMLAttribute)
     val nameField = extractAttributeName(n)
     val (name: String, isVal: Boolean) = {
@@ -181,7 +192,8 @@ object XmlParserHelper {
               Log.printInfo(s"Skipping unknown attribute stereotype '$stereo'.")
               (name, true)
             } else {
-              (name, stereo != "var")
+              ensureAttributeObeysClassStereotypes(stereo, isClassVal, name)
+              (name, stereo != AttrStereoVar)
             }
           case None => throw new RuntimeException(s"Failed to parse an attribute with stereotype: '$nameField'")
         }
@@ -231,11 +243,19 @@ object XmlParserHelper {
       if (classTypes.size > 1) throw new RuntimeException(s"Class object holds multiple contradicting stereotypes - $stereotypes")
       val classType = if (classTypes.nonEmpty) classTypes.head else Class
 
-      val attributes = (extractDiaAttributesMatchingName(n, DiaAttributeAttributes) \ DiaNodeTypeComposite).map(processAttribute)
+      val isMutable = stereotypes.contains("mutable")
+      val isImmutable = stereotypes.contains("immutable")
+
+      val classRef = extractAttributeName(n) |> DiaFile.createUncheckedClassRef
+
+      if (isMutable && isImmutable) throw new RuntimeException(s"Class '${classRef.name}' is mutable AND immutable, this cannot happen in our universe.")
+      val isVal = if (isMutable) Some(false) else if (isImmutable) Some(true) else None
+
+      val attributes = (extractDiaAttributesMatchingName(n, DiaAttributeAttributes) \ DiaNodeTypeComposite).map(processAttribute(_, isVal))
       val operations = (extractDiaAttributesMatchingName(n, DiaAttributeOperations) \ DiaNodeTypeComposite).map(processOperation)
 
       DiaClass(
-        extractAttributeName(n) |> DiaFile.createUncheckedClassRef,
+        classRef,
         extractGeometry(n),
         None,
         Seq(),
@@ -243,8 +263,8 @@ object XmlParserHelper {
         attributes,
         operations,
         classType,
-        stereotypes.contains("mutable"),
-        stereotypes.contains("immutable")
+        isMutable,
+        isImmutable
       )
     }
   }
