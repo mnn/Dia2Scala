@@ -36,7 +36,8 @@ object XmlParser {
           a <- processPackages(xml, DiaFile())
           b <- semiProcessClasses(xml, a)
           c <- processOneWayConnections(xml, b)
-        } yield c
+          d <- processErrors(c)
+        } yield d
     }
   }
 }
@@ -164,12 +165,35 @@ object XmlParserHelper {
 
   def extractAttributeName(n: Node): String = extractDiaAttributeStringAndStrip(n, DiaAttributeName)
 
+  val AttributeStereotypesPattern = "^<<([a-zA-Z ,]+)>>\\s*([a-zA-Z0-9]+)\\s*$".r
+  val ValidAttrStereos = Seq("val", "var")
+
   def processAttribute(n: Node): DiaAttribute = {
     assertAttributeType(n, DiaCompositeTypeUMLAttribute)
+    val nameField = extractAttributeName(n)
+    val (name: String, isVal: Boolean) = {
+      if (nameField.startsWith("<<")) {
+        AttributeStereotypesPattern.findFirstMatchIn(nameField) match {
+          case Some(rMatch) =>
+            val stereo = rMatch.group(1)
+            val name = rMatch.group(2)
+            if (!ValidAttrStereos.contains(stereo)) {
+              Log.printInfo(s"Skipping unknown attribute stereotype '$stereo'.")
+              (name, true)
+            } else {
+              (name, stereo != "var")
+            }
+          case None => throw new RuntimeException(s"Failed to parse an attribute with stereotype: '$nameField'")
+        }
+      } else (nameField, true)
+    }
+
     DiaAttribute(
-      extractAttributeName(n),
+      name,
       extractDiaAttributeStringAndStrip(n, DiaAttributeType) |> convertTypeWithoutClassExistenceChecks,
-      extractVisibility(n)
+      extractVisibility(n),
+      isVal,
+      extractDiaAttributeStringAndStrip(n, DiaAttributeValue) |> wrapNonEmptyStringToSome
     )
   }
 
@@ -194,16 +218,18 @@ object XmlParserHelper {
   def processClass(n: Node): \/[String, DiaClass] = {
     assertNodeObjectAndTypeAttribute(n, DiaObjectTypeClass)
     wrapErrorToJunction {
-      val stereotype = extractDiaAttributeStringAndStrip(n, DiaAttributeStereotype)
-      val classType = stereotype match {
-        case "interface" | "trait" => Trait
-        case "enum" | "enumeration" => Enumeration
-        case "singleton" | "object" => Object
-        case "" => Class
+      val stereotypes = extractDiaAttributeStringAndStrip(n, DiaAttributeStereotype).split("[,;] *").toSeq
+      val classTypes = stereotypes.flatMap {
+        case "interface" | "trait" => Seq(Trait)
+        case "enum" | "enumeration" => Seq(Enumeration)
+        case "singleton" | "object" => Seq(Object)
+        case "" => Seq(Class)
         case s =>
           Log.printInfo(s"Ignoring not recognized class stereotype '$s'.")
-          Class
+          Seq()
       }
+      if (classTypes.size > 1) throw new RuntimeException(s"Class object holds multiple contradicting stereotypes - $stereotypes")
+      val classType = if (classTypes.nonEmpty) classTypes.head else Class
 
       val attributes = (extractDiaAttributesMatchingName(n, DiaAttributeAttributes) \ DiaNodeTypeComposite).map(processAttribute)
       val operations = (extractDiaAttributesMatchingName(n, DiaAttributeOperations) \ DiaNodeTypeComposite).map(processOperation)
@@ -216,7 +242,9 @@ object XmlParserHelper {
         n \@ DiaAttributeId,
         attributes,
         operations,
-        classType
+        classType,
+        stereotypes.contains("mutable"),
+        stereotypes.contains("immutable")
       )
     }
   }
@@ -323,4 +351,11 @@ object XmlParserHelper {
       a <- processOneWayConnection(e, f, DiaObjectTypeGeneralization, parseGeneralization, processGeneralization)
       b <- processOneWayConnection(e, a, DiaObjectTypeRealizes, parseRealizes, processRealizes)
     } yield b
+
+  def processErrors(f: DiaFile): \/[String, DiaFile] = {
+    val errs = f.validationErrors()
+    if (errs.isEmpty) f.right
+    else errs.mkString("\n").left
+  }
+
 }

@@ -9,8 +9,12 @@ import Scalaz._
 import org.scalatest.FlatSpec
 
 class TestXmlParser extends FlatSpec {
+  private def doFail(msg: String) {
+    fail(msg)
+  }
+
   def rightOrFailIn[A](in: \/[String, A])(c: A => Unit) {
-    in.fold(e => fail(s"Error occurred (current path: ${TestHelper.currentPath()}): $e"), c)
+    in.fold(e => doFail(s"Error occurred: $e"), c)
   }
 
   def parse(name: String, packed: Boolean): \/[String, DiaFile] =
@@ -63,11 +67,27 @@ class TestXmlParser extends FlatSpec {
   }
 
   final val xmlAttribute = "       <dia:composite type=\"umlattribute\">\n          <dia:attribute name=\"name\">\n            <dia:string>#aReference#</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"type\">\n            <dia:string>#ClassA#</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"value\">\n            <dia:string>##</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"comment\">\n            <dia:string>##</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"visibility\">\n            <dia:enum val=\"2\"/>\n          </dia:attribute>\n          <dia:attribute name=\"abstract\">\n            <dia:boolean val=\"false\"/>\n          </dia:attribute>\n          <dia:attribute name=\"class_scope\">\n            <dia:boolean val=\"false\"/>\n          </dia:attribute> </dia:composite>"
-  final val expectedAttributeA = DiaAttribute("aReference", createUncheckedClassRefOptRight("ClassA"), DiaVisibility.Protected)
+  final val expectedAttributeA = DiaAttribute("aReference", createUncheckedClassRefOptRight("ClassA"), DiaVisibility.Protected, true, None)
   "processAttribute" should "process an attribute" in {
     val elem = xml.XML.loadString(xmlAttribute)
     val res = XmlParserHelper.processAttribute(elem)
     assert(res == expectedAttributeA)
+  }
+
+  final val xmlAttributeWithVal = "        <dia:composite type=\"umlattribute\">\n          <dia:attribute name=\"name\">\n            <dia:string>#&lt;&lt;val&gt;&gt; valAttr#</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"type\">\n            <dia:string>##</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"value\">\n            <dia:string>#defaultValValue#</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"comment\">\n            <dia:string>##</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"visibility\">\n            <dia:enum val=\"0\"/>\n          </dia:attribute>\n          <dia:attribute name=\"abstract\">\n            <dia:boolean val=\"false\"/>\n          </dia:attribute>\n          <dia:attribute name=\"class_scope\">\n            <dia:boolean val=\"false\"/>\n          </dia:attribute>\n        </dia:composite>"
+  final val expectedAttributeValAttr = DiaAttribute("valAttr", None, DiaVisibility.Public, true, "defaultValValue".some)
+  it should "process an attribute with default value and tagged with <<val>>" in {
+    val elem = xml.XML.loadString(xmlAttributeWithVal)
+    val res = XmlParserHelper.processAttribute(elem)
+    assert(res == expectedAttributeValAttr)
+  }
+
+  final val xmlAttributeWithVar = "        <dia:composite type=\"umlattribute\">\n          <dia:attribute name=\"name\">\n            <dia:string>#&lt;&lt;var&gt;&gt; varAttr#</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"type\">\n            <dia:string>#String#</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"value\">\n            <dia:string>#\"sss\"#</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"comment\">\n            <dia:string>##</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"visibility\">\n            <dia:enum val=\"1\"/>\n          </dia:attribute>\n          <dia:attribute name=\"abstract\">\n            <dia:boolean val=\"false\"/>\n          </dia:attribute>\n          <dia:attribute name=\"class_scope\">\n            <dia:boolean val=\"false\"/>\n          </dia:attribute>\n        </dia:composite>"
+  final val expectedAttributeVarAttr = DiaAttribute("varAttr", createScalaClassRefOptLeft("String"), DiaVisibility.Private, false, "\"sss\"".some)
+  it should "process an attribute with default value and tagged with <<var>>" in {
+    val elem = xml.XML.loadString(xmlAttributeWithVar)
+    val res = XmlParserHelper.processAttribute(elem)
+    assert(res == expectedAttributeVarAttr)
   }
 
   final val xmlOperation = "        <dia:composite type=\"umloperation\">\n          <dia:attribute name=\"name\">\n            <dia:string>#stringToInt#</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"stereotype\">\n            <dia:string>##</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"type\">\n            <dia:string>#Int#</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"visibility\">\n            <dia:enum val=\"0\"/>\n          </dia:attribute>\n          <dia:attribute name=\"comment\">\n            <dia:string>##</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"abstract\">\n            <dia:boolean val=\"false\"/>\n          </dia:attribute>\n          <dia:attribute name=\"inheritance_type\">\n            <dia:enum val=\"2\"/>\n          </dia:attribute>\n          <dia:attribute name=\"query\">\n            <dia:boolean val=\"false\"/>\n          </dia:attribute>\n          <dia:attribute name=\"class_scope\">\n            <dia:boolean val=\"false\"/>\n          </dia:attribute>\n          <dia:attribute name=\"parameters\">\n            <dia:composite type=\"umlparameter\">\n              <dia:attribute name=\"name\">\n                <dia:string>#str#</dia:string>\n              </dia:attribute>\n              <dia:attribute name=\"type\">\n                <dia:string>#String#</dia:string>\n              </dia:attribute>\n              <dia:attribute name=\"value\">\n                <dia:string>##</dia:string>\n              </dia:attribute>\n              <dia:attribute name=\"comment\">\n                <dia:string>##</dia:string>\n              </dia:attribute>\n              <dia:attribute name=\"kind\">\n                <dia:enum val=\"0\"/>\n              </dia:attribute>\n            </dia:composite>\n          </dia:attribute>\n        </dia:composite>"
@@ -82,7 +102,7 @@ class TestXmlParser extends FlatSpec {
   "processClass" should "process a class" in {
     val elem = xml.XML.loadString(xmlClass)
     rightOrFailIn(XmlParserHelper.processClass(elem)) { res =>
-      assert(res == DiaClass(createUncheckedClassRef("ClassB"), DiaGeometry(13, 3, 11.665000000000001, 3.3999999999999999), None, Seq(), "O2", Seq(expectedAttributeA), Seq(expectedOperation), DiaClassType.Class))
+      assert(res == DiaClass(createUncheckedClassRef("ClassB"), DiaGeometry(13, 3, 11.665000000000001, 3.3999999999999999), None, Seq(), "O2", Seq(expectedAttributeA), Seq(expectedOperation), DiaClassType.Class, false, false))
     }
   }
 
@@ -104,8 +124,8 @@ class TestXmlParser extends FlatSpec {
   "processGeneralization" should "process a generalization" in {
     val classIdFrom = "idFrom"
     val classIdTo = "idTo"
-    val classFrom = DiaClass(createUncheckedClassRef("fromName"), DiaGeometry(-1, -2, 1, 1), None, Seq(), classIdFrom, Seq(), Seq(), DiaClassType.Class)
-    val classTo = DiaClass(createUncheckedClassRef("toName"), DiaGeometry(2, 3, 5, 5), None, Seq(), classIdTo, Seq(), Seq(), DiaClassType.Class)
+    val classFrom = DiaClass(createUncheckedClassRef("fromName"), DiaGeometry(-1, -2, 1, 1), None, Seq(), classIdFrom, Seq(), Seq(), DiaClassType.Class, false, false)
+    val classTo = DiaClass(createUncheckedClassRef("toName"), DiaGeometry(2, 3, 5, 5), None, Seq(), classIdTo, Seq(), Seq(), DiaClassType.Class, false, false)
     val f = DiaFile(Seq(), Seq(classFrom, classTo), Map(classIdFrom -> classFrom, classIdTo -> classTo))
     val geneConn = DiaOneWayConnection(classIdFrom, classIdTo, DiaGeneralizationType)
     val res = XmlParserHelper.processGeneralization(OneWayConnectionProcessorData(f, geneConn, Map(classIdFrom -> geneConn), Map(classIdTo -> geneConn)))

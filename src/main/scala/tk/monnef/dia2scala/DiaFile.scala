@@ -58,7 +58,8 @@ object DiaFile {
   def isScalaClass(n: String): Boolean = ScalaClasses.contains(n)
 
   def convertTypeWithoutClassExistenceChecks(i: String): Option[\/[String, DiaClassRef]] = {
-    if (isScalaClass(i)) i.left.some
+    if (i.isEmpty) None
+    else if (isScalaClass(i)) i.left.some
     else createUncheckedClassRef(i).right.some
   }
 
@@ -97,8 +98,8 @@ object DiaFile {
         f.classes.map(c => {
           c.attributes.filter(a => a.aType.nonEmpty).flatMap(a => {
             a.aType.get match {
-              case -\/(sc) => if (isScalaClass(sc)) Seq() else Seq(s"Type $sc of attribute ${a.name} in ${c.ref.name} is not a Scala class.")
-              case \/-(ref) => if (f.classExists(ref)) Seq() else Seq(s"Class ${ref.name} of attribute ${a.name} in ${c.ref.name} not found.")
+              case -\/(sc) => if (isScalaClass(sc)) Seq() else Seq(s"Type '$sc' of attribute '${a.name}' in '${c.ref.name}' is not a Scala class.")
+              case \/-(ref) => if (f.classExists(ref)) Seq() else Seq(s"Class '${ref.name}' of attribute '${a.name}' in '${c.ref.name}' not found.")
             }
           })
         })
@@ -142,10 +143,11 @@ case class DiaClassRef(name: String, inPackage: String) {
   lazy val fullName = s"$inPackage.$name"
 }
 
-case class DiaClass(ref: DiaClassRef, geometry: DiaGeometry, extendsFrom: Option[DiaClassRef], mixins: Seq[DiaClassRef], id: String, attributes: Seq[DiaAttribute], operations: Seq[DiaOperationDescriptor], classType: DiaClassType) extends Checkable {
+case class DiaClass(ref: DiaClassRef, geometry: DiaGeometry, extendsFrom: Option[DiaClassRef], mixins: Seq[DiaClassRef], id: String, attributes: Seq[DiaAttribute], operations: Seq[DiaOperationDescriptor], classType: DiaClassType, mutable: Boolean, immutable: Boolean) extends Checkable {
   override def validationErrors(): Seq[String] = {
     ({
       if (ref.name.trim.isEmpty) Seq(Seq(s"Class with empty name ($id)."))
+      else if (mutable && immutable) Seq(Seq(s"Class cannot be mark as mutable AND immutable at a same time ($id)."))
       else Seq()
     }: Seq[Seq[String]]).flatten
   }
@@ -155,7 +157,7 @@ case class DiaOperationDescriptor(name: String, visibility: DiaVisibility, param
 
 case class DiaOperationParameter(name: String, pType: Option[\/[String, DiaClassRef]])
 
-case class DiaAttribute(name: String, aType: Option[\/[String, DiaClassRef]], visibility: DiaVisibility)
+case class DiaAttribute(name: String, aType: Option[\/[String, DiaClassRef]], visibility: DiaVisibility, isVal: Boolean, defaultValue: Option[String])
 
 case class DiaGeometry(x: Double, y: Double, width: Double, height: Double) {
   def contains(other: DiaGeometry): Boolean = contains(other.x, other.y, other.width, other.height)
