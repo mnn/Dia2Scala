@@ -227,31 +227,42 @@ object XmlParserHelper {
     )
   }
 
+  val ClassStereoInterface = "interface"
+  val ClassStereoTrait = "trai"
+  val ClassStereoEnumeration = "enumeration"
+  val ClassStereoEnum = "enum"
+  val ClassStereoSingleton = "singleton"
+  val ClassStereoObject = "object"
+  val ClassStereoMutable = "mutable"
+  val ClassStereoImmutable = "immutable"
+  val ValidClassStereos = Seq(ClassStereoInterface, ClassStereoTrait, ClassStereoEnum, ClassStereoEnumeration, ClassStereoSingleton, ClassStereoObject, ClassStereoMutable, ClassStereoImmutable)
+
   def processClass(n: Node): \/[String, DiaClass] = {
     assertNodeObjectAndTypeAttribute(n, DiaObjectTypeClass)
     wrapErrorToJunction {
       val stereotypes = extractDiaAttributeStringAndStrip(n, DiaAttributeStereotype).split("[,;] *").toSeq
       val classTypes = stereotypes.flatMap {
-        case "interface" | "trait" => Seq(Trait)
-        case "enum" | "enumeration" => Seq(Enumeration)
-        case "singleton" | "object" => Seq(Object)
+        case ClassStereoInterface | ClassStereoTrait => Seq(Trait)
+        case ClassStereoEnum | ClassStereoEnumeration => Seq(Enumeration)
+        case ClassStereoSingleton | ClassStereoObject => Seq(Object)
         case "" => Seq(Class)
         case s =>
-          Log.printInfo(s"Ignoring not recognized class stereotype '$s'.")
+          if (!ValidClassStereos.contains(s)) Log.printInfo(s"Ignoring not recognized class stereotype '$s'.")
           Seq()
       }
       if (classTypes.size > 1) throw new RuntimeException(s"Class object holds multiple contradicting stereotypes - $stereotypes")
       val classType = if (classTypes.nonEmpty) classTypes.head else Class
 
-      val isMutable = stereotypes.contains("mutable")
-      val isImmutable = stereotypes.contains("immutable")
+      val isMutable = stereotypes.contains(ClassStereoMutable)
+      val isImmutable = stereotypes.contains(ClassStereoImmutable)
 
       val classRef = extractAttributeName(n) |> DiaFile.createUncheckedClassRef
 
       if (isMutable && isImmutable) throw new RuntimeException(s"Class '${classRef.name}' is mutable AND immutable, this cannot happen in our universe.")
       val isVal = if (isMutable) Some(false) else if (isImmutable) Some(true) else None
 
-      val attributes = (extractDiaAttributesMatchingName(n, DiaAttributeAttributes) \ DiaNodeTypeComposite).map(processAttribute(_, isVal))
+      val attributesRaw = (extractDiaAttributesMatchingName(n, DiaAttributeAttributes) \ DiaNodeTypeComposite).map(processAttribute(_, isVal))
+      val attributes = attributesRaw.map { a => a.copy(isVal = if (isMutable) false else if (isImmutable) true else a.isVal)}
       val operations = (extractDiaAttributesMatchingName(n, DiaAttributeOperations) \ DiaNodeTypeComposite).map(processOperation)
 
       DiaClass(

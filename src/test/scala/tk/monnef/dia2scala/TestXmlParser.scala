@@ -58,6 +58,15 @@ class TestXmlParser extends FlatSpec {
     }
   }
 
+  it should "parse and process mutable class" in {
+    rightOrFailIn(parsePacked("simple03")) { res =>
+      val c = res.findClass("Mutable").get
+      assert(c.mutable)
+      assert(!c.immutable)
+      assert(!c.attributes(0).isVal)
+    }
+  }
+
   final val xmlPackage = "    <dia:object type=\"UML - LargePackage\" version=\"0\" id=\"O0\">\n      <dia:attribute name=\"obj_pos\">\n        <dia:point val=\"11,1\"/>\n      </dia:attribute>\n      <dia:attribute name=\"obj_bb\">\n        <dia:rectangle val=\"10.95,-0.05;28.05,8.05\"/>\n      </dia:attribute>\n      <dia:attribute name=\"meta\">\n        <dia:composite type=\"dict\"/>\n      </dia:attribute>\n      <dia:attribute name=\"elem_corner\">\n        <dia:point val=\"11,1\"/>\n      </dia:attribute>\n      <dia:attribute name=\"elem_width\">\n        <dia:real val=\"17\"/>\n      </dia:attribute>\n      <dia:attribute name=\"elem_height\">\n        <dia:real val=\"7\"/>\n      </dia:attribute>\n      <dia:attribute name=\"line_width\">\n        <dia:real val=\"0.10000000149011612\"/>\n      </dia:attribute>\n      <dia:attribute name=\"line_colour\">\n        <dia:color val=\"#000000\"/>\n      </dia:attribute>\n      <dia:attribute name=\"fill_colour\">\n        <dia:color val=\"#ffffff\"/>\n      </dia:attribute>\n      <dia:attribute name=\"text_colour\">\n        <dia:color val=\"#000000\"/>\n      </dia:attribute>\n      <dia:attribute name=\"stereotype\">\n        <dia:string>##</dia:string>\n      </dia:attribute>\n      <dia:attribute name=\"name\">\n        <dia:string>#packageB#</dia:string>\n      </dia:attribute>\n    </dia:object> "
   "processPackage" should "process a package" in {
     val elem = xml.XML.loadString(xmlPackage)
