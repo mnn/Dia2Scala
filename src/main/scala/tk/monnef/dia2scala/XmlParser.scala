@@ -228,7 +228,7 @@ object XmlParserHelper {
   }
 
   val ClassStereoInterface = "interface"
-  val ClassStereoTrait = "trai"
+  val ClassStereoTrait = "trait"
   val ClassStereoEnumeration = "enumeration"
   val ClassStereoEnum = "enum"
   val ClassStereoSingleton = "singleton"
@@ -297,11 +297,38 @@ object XmlParserHelper {
 
   def createIdToClassMapping(f: DiaFile): DiaFile = f.copy(idToClass = f.classes.map { c => c.id -> c}.toMap)
 
+  def processClassRefInSamePackage(f: DiaFile): DiaFile = f.copy(classes = {
+    val classToPackage = f.classes.map { c => c.ref.name -> c.ref.inPackage}.toMap
+
+    def handleRef(r: DiaClassRef): DiaClassRef =
+      if (r.inPackage.nonEmpty) r
+      else classToPackage.get(r.name) match {
+        case Some(pck) => r.copy(inPackage = pck)
+        case None => r
+      }
+
+    def handleOptJunctRef(r: Option[\/[String, DiaClassRef]]): Option[\/[String, DiaClassRef]] = r.map(_.bimap(a => a, handleRef))
+
+    def handleAttribute(a: DiaAttribute): DiaAttribute = a.copy(aType = handleOptJunctRef(a.aType))
+
+    def handleOperation(o: DiaOperationDescriptor): DiaOperationDescriptor = o.copy(
+      oType = handleOptJunctRef(o.oType),
+      parameters = o.parameters.map { p => p.copy(pType = handleOptJunctRef(p.pType))}
+    )
+
+    f.classes.map {
+      c => c.copy(
+        attributes = c.attributes.map(handleAttribute),
+        operations = c.operations.map(handleOperation)
+      )
+    }
+  })
+
   def semiProcessClasses(e: Elem, f: DiaFile): \/[String, DiaFile] =
     for {
       parsedClasses <- extractObjectsByType(e, DiaObjectTypeClass).map(processClass) |> liftFirstError
     } yield f.copy(classes = parsedClasses) |>
-      assignPackages |> createIdToClassMapping
+      assignPackages |> createIdToClassMapping |> processClassRefInSamePackage
 
   def parseConnections(n: Node): (String, String) = {
     assertNodeName(n, DiaNodeTypeConnections)

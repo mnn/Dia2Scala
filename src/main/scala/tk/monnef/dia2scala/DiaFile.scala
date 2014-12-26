@@ -19,6 +19,10 @@ case class DiaFile(packages: Seq[DiaPackage], classes: Seq[DiaClass], idToClass:
       validateClassReferences(this)
   }
 
+  def findClassInAnyPackage(name: String): Seq[DiaClass] = {
+    classes.filter(c => c.ref.name == name)
+  }
+
   def findClass(fullName: String): Option[DiaClass] = {
     findClass(createUncheckedClassRef(fullName))
   }
@@ -121,8 +125,10 @@ object DiaFile {
           if p.pType.isDefined
           t = p.pType.get
         } yield t match {
-            case -\/(sc) => if (isScalaClass(sc)) Seq() else Seq(s"Type $sc of parameter ${p.name} of operations ${o.name} in ${c.ref.name} is not a Scala class.")
-            case \/-(ref) => if (f.classExists(ref)) Seq() else Seq(s"Type ${ref.name} of parameter ${p.name} of operation ${o.name} in ${c.ref.name} not found.")
+            case -\/(sc) => if (isScalaClass(sc)) Seq() else Seq(s"Type '$sc' of parameter '${p.name}' of operation '${o.name}' in '${c.ref.name}' is not a Scala class.")
+            case \/-(ref) =>
+              if (ref.name.contains("[")) Seq() //TODO: implement generics checking
+              else if (f.classExists(ref)) Seq() else Seq(s"Type '${ref.name}' of parameter '${p.name}' of operation '${o.name}' in '${c.ref.name}' not found.")
           }): Seq[Seq[String]]
       }
       ).flatten

@@ -7,6 +7,7 @@ import tk.monnef.dia2scala.XmlParserHelper.OneWayConnectionProcessorData
 import scalaz._
 import Scalaz._
 import org.scalatest.FlatSpec
+import Utils._
 
 class TestXmlParser extends FlatSpec {
   private def doFail(msg: String) {
@@ -64,6 +65,19 @@ class TestXmlParser extends FlatSpec {
       assert(c.mutable)
       assert(!c.immutable)
       assert(!c.attributes(0).isVal)
+    }
+  }
+
+  it should "parse and process reference to classes in same package" in {
+    rightOrFailIn(parsePacked("simple02")) { res =>
+      val c = res.findClassInAnyPackage("ClassC")(0)
+
+      val attr = c.attributes.find(_.name == "sameP").get
+      assert(attr.aType.get.getRight.fullName == "packageC.IClassD")
+
+      val op = c.operations.find(_.name == "samePckOp").get
+      assert(op.parameters(0).pType.get.getRight.fullName == "packageC.ClassE")
+      assert(op.oType.get.getRight.fullName == "packageC.TraitF")
     }
   }
 

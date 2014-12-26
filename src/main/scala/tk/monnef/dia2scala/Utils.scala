@@ -113,11 +113,17 @@ object Utils {
       res
     }
 
-  implicit class JunctionPimps[A](j: \/[A, A]) {
+  implicit class SymmetricJunctionPimps[A](j: \/[A, A]) {
     def get: A = j match {
       case -\/(a) => a
       case \/-(a) => a
     }
+  }
+
+  implicit class JunctionPimps[L, R](j: \/[L, R]) {
+    def getLeft: L = j match {case -\/(l) => l }
+
+    def getRight: R = j match {case \/-(r) => r }
   }
 
 }
