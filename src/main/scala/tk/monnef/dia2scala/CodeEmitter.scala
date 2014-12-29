@@ -28,7 +28,7 @@ object CodeEmitterHelper {
     def genExtends = c.extendsFrom.nonEmpty ? s" extends ${c.extendsFrom.get.fullName}" | ""
     def genMixins = if (c.mixins.isEmpty) "" else c.mixins.mkString(" with ", " with ", "")
     def genVisibility(v: DiaVisibility) = if (v == DiaVisibility.Public) "" else v.code + " "
-    def genType(t: Option[\/[String, DiaClassRef]]): String = t.map(j => {": " + j.bimap(a => a, _.fullName).get}).getOrElse("")
+    def genType(t: Option[\/[String, DiaUserClassRef]]): String = t.map(j => {": " + j.bimap(a => a, _.fullName).get}).getOrElse("")
     def genAttributes: Seq[String] = c.attributes.map { a: DiaAttribute =>
       indent +
         genVisibility(a.visibility) +

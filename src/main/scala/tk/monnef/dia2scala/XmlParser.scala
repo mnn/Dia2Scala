@@ -256,7 +256,7 @@ object XmlParserHelper {
       val isMutable = stereotypes.contains(ClassStereoMutable)
       val isImmutable = stereotypes.contains(ClassStereoImmutable)
 
-      val classRef = extractAttributeName(n) |> DiaFile.createUncheckedClassRef
+      val classRef = extractAttributeName(n) |> DiaFile.createUncheckedSimpleClassRef
 
       if (isMutable && isImmutable) throw new RuntimeException(s"Class '${classRef.name}' is mutable AND immutable, this cannot happen in our universe.")
       val isVal = if (isMutable) Some(false) else if (isImmutable) Some(true) else None
@@ -300,14 +300,14 @@ object XmlParserHelper {
   def processClassRefInSamePackage(f: DiaFile): DiaFile = f.copy(classes = {
     val classToPackage = f.classes.map { c => c.ref.name -> c.ref.inPackage}.toMap
 
-    def handleRef(r: DiaClassRef): DiaClassRef =
+    def handleRef(r: DiaUserClassRef): DiaUserClassRef =
       if (r.inPackage.nonEmpty) r
       else classToPackage.get(r.name) match {
         case Some(pck) => r.copy(inPackage = pck)
         case None => r
       }
 
-    def handleOptJunctRef(r: Option[\/[String, DiaClassRef]]): Option[\/[String, DiaClassRef]] = r.map(_.bimap(a => a, handleRef))
+    def handleOptJunctRef(r: Option[\/[String, DiaUserClassRef]]): Option[\/[String, DiaUserClassRef]] = r.map(_.bimap(a => a, handleRef))
 
     def handleAttribute(a: DiaAttribute): DiaAttribute = a.copy(aType = handleOptJunctRef(a.aType))
 
