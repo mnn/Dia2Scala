@@ -1,19 +1,21 @@
 package tk.monnef.dia2scala
 
+import java.io.{File, FileInputStream, InputStream, InputStreamReader}
 import java.util.zip.GZIPInputStream
-import tk.monnef.dia2scala.DiaFile.convertTypeWithoutClassExistenceChecks
+
+import tk.monnef.dia2scala.DiaClassRefBase.fromStringUnchecked
+import tk.monnef.dia2scala.DiaClassType._
 import tk.monnef.dia2scala.DiaVisibility.DiaVisibility
+import tk.monnef.dia2scala.Utils._
 
 import scala.util.Try
-import java.io.{InputStreamReader, FileInputStream, InputStream, File}
-import Utils._
-import DiaClassType._
 
 object XmlParser {
 
-  import XmlParserHelper._
+  import tk.monnef.dia2scala.XmlParserHelper._
+
+  import scalaz.Scalaz._
   import scalaz._
-  import Scalaz._
 
   def parseFile(file: File, isPacked: Boolean): \/[String, DiaFile] = {
     getXmlStream(file, isPacked) match {
@@ -44,12 +46,11 @@ object XmlParser {
 
 object XmlParserHelper {
 
-  import scala.xml.{Node, NodeSeq, Elem}
+  import scala.xml.{Elem, Node, NodeSeq}
+  import scalaz.Scalaz.ToIdOps
   import scalaz._
-  import scalaz.syntax.std.tuple._
   import scalaz.syntax.either._
   import scalaz.syntax.std.option._
-  import Scalaz.ToIdOps
 
   final val DiaNodeTypeObject = "object"
   final val DiaNodeTypeAttribute = "attribute"
@@ -202,7 +203,7 @@ object XmlParserHelper {
 
     DiaAttribute(
       name,
-      extractDiaAttributeStringAndStrip(n, DiaAttributeType) |> convertTypeWithoutClassExistenceChecks,
+      extractDiaAttributeStringAndStrip(n, DiaAttributeType) |> fromStringUnchecked,
       extractVisibility(n),
       isVal,
       extractDiaAttributeStringAndStrip(n, DiaAttributeValue) |> wrapNonEmptyStringToSome
@@ -213,7 +214,7 @@ object XmlParserHelper {
     assertAttributeType(n, DiaCompositeTypeUMLParameter)
     DiaOperationParameter(
       extractAttributeName(n),
-      extractDiaAttributeStringAndStrip(n, DiaAttributeType) |> convertTypeWithoutClassExistenceChecks
+      extractDiaAttributeStringAndStrip(n, DiaAttributeType) |> fromStringUnchecked
     )
   }
 
@@ -223,7 +224,7 @@ object XmlParserHelper {
       extractAttributeName(n),
       extractVisibility(n),
       (extractDiaAttributeByName(n, DiaAttributeParameters) \ DiaNodeTypeComposite).map(processParameter),
-      extractDiaAttributeStringAndStrip(n, DiaAttributeType) |> convertTypeWithoutClassExistenceChecks
+      extractDiaAttributeStringAndStrip(n, DiaAttributeType) |> fromStringUnchecked
     )
   }
 
@@ -256,7 +257,7 @@ object XmlParserHelper {
       val isMutable = stereotypes.contains(ClassStereoMutable)
       val isImmutable = stereotypes.contains(ClassStereoImmutable)
 
-      val classRef = extractAttributeName(n) |> DiaFile.createUncheckedSimpleClassRef
+      val classRef = extractAttributeName(n) |> DiaClassRefBase.createUncheckedUserClassRef
 
       if (isMutable && isImmutable) throw new RuntimeException(s"Class '${classRef.name}' is mutable AND immutable, this cannot happen in our universe.")
       val isVal = if (isMutable) Some(false) else if (isImmutable) Some(true) else None
@@ -307,13 +308,16 @@ object XmlParserHelper {
         case None => r
       }
 
-    def handleOptJunctRef(r: Option[\/[String, DiaUserClassRef]]): Option[\/[String, DiaUserClassRef]] = r.map(_.bimap(a => a, handleRef))
+    def handleAttribute(a: DiaAttribute): DiaAttribute = a.copy(aType = handleOptClassRef(a.aType))
 
-    def handleAttribute(a: DiaAttribute): DiaAttribute = a.copy(aType = handleOptJunctRef(a.aType))
+    def handleOptClassRef(r: Option[DiaClassRefBase]): Option[DiaClassRefBase] = r match {
+      case Some(userClass: DiaUserClassRef) => handleRef(userClass).some
+      case _ => r
+    }
 
     def handleOperation(o: DiaOperationDescriptor): DiaOperationDescriptor = o.copy(
-      oType = handleOptJunctRef(o.oType),
-      parameters = o.parameters.map { p => p.copy(pType = handleOptJunctRef(p.pType))}
+      oType = handleOptClassRef(o.oType),
+      parameters = o.parameters.map { p => p.copy(pType = handleOptClassRef(p.pType))}
     )
 
     f.classes.map {
