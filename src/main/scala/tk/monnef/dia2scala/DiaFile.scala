@@ -212,6 +212,8 @@ case class DiaUserClassRef(name: String, inPackage: String) extends DiaNonGeneri
 }
 
 case class DiaGenericClassRef(base: DiaNonGenericClassRefBase, params: Seq[DiaClassRefBase]) extends DiaClassRefBase {
+  // TODO: [low priority] support for "with" (easy workaround)
+
   override def emitCode(): String = base.emitCode() + "[" + params.map(_.emitCode()).mkString(", ") + "]"
 }
 
@@ -231,8 +233,8 @@ object DiaGenericClassRef {
       if (rest.isEmpty) res ++ Seq(buff)
       else {
         val (newCounter, appendChar, flipBuff) = rest.head match {
-          case '[' => (counter + 1, true, false)
-          case ']' => (counter - 1, true, false)
+          case '[' | '(' => (counter + 1, true, false)
+          case ']' | ')' => (counter - 1, true, false)
           case ',' => if (counter == 0) (0, false, true) else (counter, true, false)
           case ' ' => (counter, false, false)
           case _ => (counter, true, false)
@@ -266,7 +268,7 @@ object DiaFunctionClassRef {
     val params = paramsPossiblyTupledOrEmpty match {
       case DiaTupleClassRef(parSeq) => parSeq
       case r: Seq[DiaClassRefBase] => r
-      case DiaEmptyClassRef => Seq(DiaEmptyClassRef)
+      case e: DiaClassRefBase => Seq(e)
     }
     DiaFunctionClassRef(params, DiaClassRefBase.fromStringUnchecked(outputRaw).get)
   }
@@ -325,10 +327,21 @@ object DiaTupleClassRef {
         )
       }
 
-    loop(i, "", 0, Seq())
+    if (i.head != '(' || i.last != ')') throw new RuntimeException(s"Input doesn't seem to be a tuple.")
+    loop(i.drop(1).dropRight(1), "", 0, Seq())
   }
 
-  def fromString(i: String): DiaTupleClassRef = DiaTupleClassRef(chopTuple(i).map(DiaClassRefBase.fromStringUnchecked).map(_.get))
+  def fromString(i: String): DiaTupleClassRef =
+    if (i == "()") {
+      DiaTupleClassRef(Seq())
+    } else {
+      val chopped = chopTuple(i)
+      val res = chopped.map { x => (x, DiaClassRefBase.fromStringUnchecked(x))}.map {
+        case (orig, None) => throw new RuntimeException(s"Unable to parse: '$orig' (${chopped.mkString("  ;  ")})")
+        case (_, Some(r)) => r
+      }
+      DiaTupleClassRef(res)
+    }
 }
 
 case class DiaClass(ref: DiaUserClassRef, geometry: DiaGeometry, extendsFrom: Option[DiaUserClassRef], mixins: Seq[DiaUserClassRef], id: String, attributes: Seq[DiaAttribute], operations: Seq[DiaOperationDescriptor], classType: DiaClassType, mutable: Boolean, immutable: Boolean) extends Checkable {
