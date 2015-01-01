@@ -25,20 +25,27 @@ case class DiaFile(packages: Seq[DiaPackage], classes: Seq[DiaClass], idToClass:
     classes.filter(c => c.ref.name == name)
   }
 
-  def findClass(fullName: String): Option[DiaClass] = {
+  def findClass(fullName: String): Seq[DiaClass] = {
     findClass(DiaClassRefBase.createUncheckedUserClassRef(fullName))
   }
 
-  def findClass(inPackage: String, name: String): Option[DiaClass] = {
-    val targetRef = DiaUserClassRef(name, inPackage)
-    classes.find(c => c.ref == targetRef)
+  def findClass(inPackage: String, name: String): Seq[DiaClass] = {
+    findClass(DiaUserClassRef(name, inPackage))
   }
 
-  def findClass(ref: DiaUserClassRef): Option[DiaClass] = {
-    findClass(ref.inPackage, ref.name)
+  def findClass(ref: DiaUserClassRef): Seq[DiaClass] = {
+    classes.filter(c => c.ref == ref)
   }
 
-  def classExists(ref: DiaUserClassRef): Boolean = findClass(ref).isDefined
+  def findObject(fullName: String): Seq[DiaClass] = {
+    findObject(DiaClassRefBase.createUncheckedUserClassRef(fullName))
+  }
+
+  def findObject(ref: DiaUserClassRef): Seq[DiaClass] = {
+    findClass(ref).filter(_.classType == DiaClassType.Object)
+  }
+
+  def classExists(ref: DiaUserClassRef): Boolean = findClass(ref).nonEmpty
 
   /*
   def convertType(i: String): Option[\/[String, DiaUserClassRef]] = {
@@ -344,7 +351,7 @@ object DiaTupleClassRef {
     }
 }
 
-case class DiaClass(ref: DiaUserClassRef, geometry: DiaGeometry, extendsFrom: Option[DiaUserClassRef], mixins: Seq[DiaUserClassRef], id: String, attributes: Seq[DiaAttribute], operations: Seq[DiaOperationDescriptor], classType: DiaClassType, mutable: Boolean, immutable: Boolean) extends Checkable {
+case class DiaClass(ref: DiaUserClassRef, geometry: DiaGeometry, extendsFrom: Option[DiaUserClassRef], mixins: Seq[DiaUserClassRef], id: String, attributes: Seq[DiaAttribute], operations: Seq[DiaOperationDescriptor], classType: DiaClassType, mutable: Boolean, immutable: Boolean, hasCompanionObject: Boolean) extends Checkable {
   override def validationErrors(): Seq[String] = {
     ({
       if (ref.name.trim.isEmpty) Seq(Seq(s"Class with empty name ($id)."))

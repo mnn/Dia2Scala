@@ -67,6 +67,7 @@ object XmlParserHelper {
   final val DiaObjectTypeClass = "UML - Class"
   final val DiaObjectTypeGeneralization = "UML - Generalization"
   final val DiaObjectTypeRealizes = "UML - Realizes"
+  final val DiaObjectTypeDependency = "UML - Dependency"
 
   final val DiaCompositeTypeUMLAttribute = "umlattribute"
   final val DiaCompositeTypeUMLOperation = "umloperation"
@@ -276,7 +277,8 @@ object XmlParserHelper {
         operations,
         classType,
         isMutable,
-        isImmutable
+        isImmutable,
+        false
       )
     }
   }
@@ -328,16 +330,28 @@ object XmlParserHelper {
     }
   })
 
+  def markClassesOfCompanionObjects(f: DiaFile): DiaFile = {
+    val toMark = f.classes.filter(c => c.classType == DiaClassType.Object).map(_.ref)
+    f.copy(classes = f.classes.map { case c =>
+      if (c.classType == DiaClassType.Class && toMark.contains(c.ref)) c.copy(hasCompanionObject = true)
+      else c
+    })
+  }
+
   def semiProcessClasses(e: Elem, f: DiaFile): \/[String, DiaFile] =
     for {
       parsedClasses <- extractObjectsByType(e, DiaObjectTypeClass).map(processClass) |> liftFirstError
     } yield f.copy(classes = parsedClasses) |>
-      assignPackages |> createIdToClassMapping |> processClassRefInSamePackage
+      assignPackages |> createIdToClassMapping |> processClassRefInSamePackage |>
+      markClassesOfCompanionObjects
 
-  def parseConnections(n: Node): (String, String) = {
+  def parseConnections(n: Node, inversed: Boolean = true): (String, String) = {
     assertNodeName(n, DiaNodeTypeConnections)
     def getTargetOfConnection(handle: Int): String = ((n \ DiaNodeTypeConnection) filter (_ \@ "handle" == handle.toString)) \@ "to"
-    (getTargetOfConnection(1), getTargetOfConnection(0)) // from -> to
+
+    // from -> to
+    if (inversed) (getTargetOfConnection(1), getTargetOfConnection(0))
+    else (getTargetOfConnection(0), getTargetOfConnection(1))
   }
 
   def parsedConnectionIdsToOneWayConnection(connectionsIds: (String, String), cType: DiaOneWayConnectionType): DiaOneWayConnection =
@@ -367,7 +381,6 @@ object XmlParserHelper {
     val cType: Option[DiaOneWayConnectionType] = extractDiaAttributeStringAndStrip(n, DiaAttributeStereotype) match {
       case "" => DiaImplementsType.some
       case "mixin" => DiaMixinType.some
-      case "hasA" | "companionOf" => DiaCompanionOfType.some
       case s =>
         Log.printInfo(s"Skipping unknown realizes connection: '$s'.")
         None
@@ -384,7 +397,36 @@ object XmlParserHelper {
           case DiaImplementsType | DiaMixinType =>
             if (c.extendsFrom.isEmpty) c.copy(extendsFrom = toClassRef.some)
             else c.copy(mixins = c.mixins :+ toClassRef)
-          case DiaCompanionOfType => c
+          case t => throw new RuntimeException(s"Invalid connection type $t.")
+        }
+      } else c
+    })
+
+  def parseDependency(n: Node): Option[DiaOneWayConnection] = {
+    assertNodeObjectAndTypeAttribute(n, DiaObjectTypeDependency)
+    val conn = parseConnections((n \ DiaNodeTypeConnections).head, false)
+    val cType: Option[DiaOneWayConnectionType] = extractDiaAttributeStringAndStrip(n, DiaAttributeStereotype) match {
+      case "" => None
+      case "hasA" | "companionOf" => DiaCompanionOfType.some
+      case s =>
+        Log.printInfo(s"Skipping unknown dependency connection: '$s'.")
+        None
+    }
+    cType.map { ct => conn |> {parsedConnectionIdsToOneWayConnection(_, ct)}}
+  }
+
+  def processDependency(i: OneWayConnectionProcessorData): DiaFile =
+    i.f.copy(classes = i.f.classes.map { c =>
+      if (c.id == i.c.fromId) {
+        val conn = i.c
+        conn.cType match {
+          case DiaCompanionOfType => c.copy(classType = DiaClassType.Object)
+          case t => throw new RuntimeException(s"Invalid connection type $t.")
+        }
+      } else if (c.id == i.c.toId) {
+        val conn = i.c
+        conn.cType match {
+          case DiaCompanionOfType => c.copy(hasCompanionObject = true)
           case t => throw new RuntimeException(s"Invalid connection type $t.")
         }
       } else c
@@ -412,7 +454,8 @@ object XmlParserHelper {
     for {
       a <- processOneWayConnection(e, f, DiaObjectTypeGeneralization, parseGeneralization, processGeneralization)
       b <- processOneWayConnection(e, a, DiaObjectTypeRealizes, parseRealizes, processRealizes)
-    } yield b
+      c <- processOneWayConnection(e, b, DiaObjectTypeDependency, parseDependency, processDependency)
+    } yield c
 
   def processErrors(f: DiaFile): \/[String, DiaFile] = {
     val errs = f.validationErrors()

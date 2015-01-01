@@ -61,7 +61,7 @@ class TestXmlParser extends FlatSpec {
 
   it should "parse and process mutable class" in {
     rightOrFailIn(parsePacked("simple03")) { res =>
-      val c = res.findClass("Mutable").get
+      val c = res.findClass("Mutable").head
       assert(c.mutable)
       assert(!c.immutable)
       assert(!c.attributes(0).isVal)
@@ -80,6 +80,28 @@ class TestXmlParser extends FlatSpec {
       val op = c.operations.find(_.name == "samePckOp").get
       assert(getOptUserClassFullName(op.parameters(0).pType) == "packageC.ClassE")
       assert(getOptUserClassFullName(op.oType) == "packageC.TraitF")
+    }
+  }
+
+  it should "parse and process object stereotype" in {
+    rightOrFailIn(parsePacked("simple03")) { res =>
+      val aObj = res.findClass("A").find(_.classType == DiaClassType.Object).get
+      assert(aObj.attributes.head.name == "aO")
+
+      val aCls = res.findClass("A").find(_.classType == DiaClassType.Class).get
+      assert(aCls.hasCompanionObject)
+      assert(aCls.attributes.head.name == "a")
+    }
+  }
+
+  it should "parse and process compaionOf stereotype" in {
+    rightOrFailIn(parsePacked("simple03")) { res =>
+      val bObj = res.findObject("B").head
+      assert(bObj.attributes.head.name == "bO")
+
+      val bCls = res.findClass("B").find(_.classType == DiaClassType.Class).get
+      assert(bCls.hasCompanionObject)
+      assert(bCls.attributes.head.name == "b")
     }
   }
 
@@ -127,7 +149,7 @@ class TestXmlParser extends FlatSpec {
   "processClass" should "process a class" in {
     val elem = xml.XML.loadString(xmlClass)
     rightOrFailIn(XmlParserHelper.processClass(elem)) { res =>
-      assert(res == DiaClass(createUncheckedUserClassRef("ClassB"), DiaGeometry(13, 3, 11.665000000000001, 3.3999999999999999), None, Seq(), "O2", Seq(expectedAttributeA), Seq(expectedOperation), DiaClassType.Class, false, false))
+      assert(res == DiaClass(createUncheckedUserClassRef("ClassB"), DiaGeometry(13, 3, 11.665000000000001, 3.3999999999999999), None, Seq(), "O2", Seq(expectedAttributeA), Seq(expectedOperation), DiaClassType.Class, false, false, false))
     }
   }
 
@@ -149,8 +171,8 @@ class TestXmlParser extends FlatSpec {
   "processGeneralization" should "process a generalization" in {
     val classIdFrom = "idFrom"
     val classIdTo = "idTo"
-    val classFrom = DiaClass(createUncheckedUserClassRef("fromName"), DiaGeometry(-1, -2, 1, 1), None, Seq(), classIdFrom, Seq(), Seq(), DiaClassType.Class, false, false)
-    val classTo = DiaClass(createUncheckedUserClassRef("toName"), DiaGeometry(2, 3, 5, 5), None, Seq(), classIdTo, Seq(), Seq(), DiaClassType.Class, false, false)
+    val classFrom = DiaClass(createUncheckedUserClassRef("fromName"), DiaGeometry(-1, -2, 1, 1), None, Seq(), classIdFrom, Seq(), Seq(), DiaClassType.Class, false, false, false)
+    val classTo = DiaClass(createUncheckedUserClassRef("toName"), DiaGeometry(2, 3, 5, 5), None, Seq(), classIdTo, Seq(), Seq(), DiaClassType.Class, false, false, false)
     val f = DiaFile(Seq(), Seq(classFrom, classTo), Map(classIdFrom -> classFrom, classIdTo -> classTo))
     val geneConn = DiaOneWayConnection(classIdFrom, classIdTo, DiaGeneralizationType)
     val res = XmlParserHelper.processGeneralization(OneWayConnectionProcessorData(f, geneConn, Map(classIdFrom -> geneConn), Map(classIdTo -> geneConn)))
@@ -177,5 +199,12 @@ class TestXmlParser extends FlatSpec {
 
     ensureAttributeObeysClassStereotypes("val", None, "attr")
     ensureAttributeObeysClassStereotypes("val", None, "attr")
+  }
+
+  final val xmlDependency = " <dia:object type=\"UML - Dependency\" version=\"1\" id=\"O6\">\n      <dia:attribute name=\"obj_pos\">\n        <dia:point val=\"25.9496,16.4\"/>\n      </dia:attribute>\n      <dia:attribute name=\"obj_bb\">\n        <dia:rectangle val=\"18.8703,11.95;27.17,16.45\"/>\n      </dia:attribute>\n      <dia:attribute name=\"meta\">\n        <dia:composite type=\"dict\"/>\n      </dia:attribute>\n      <dia:attribute name=\"orth_points\">\n        <dia:point val=\"25.9496,16.4\"/>\n        <dia:point val=\"22.835,16.4\"/>\n        <dia:point val=\"22.835,12.4\"/>\n        <dia:point val=\"19.3203,12.4\"/>\n      </dia:attribute>\n      <dia:attribute name=\"orth_orient\">\n        <dia:enum val=\"0\"/>\n        <dia:enum val=\"1\"/>\n        <dia:enum val=\"0\"/>\n      </dia:attribute>\n      <dia:attribute name=\"orth_autoroute\">\n        <dia:boolean val=\"true\"/>\n      </dia:attribute>\n      <dia:attribute name=\"text_colour\">\n        <dia:color val=\"#000000\"/>\n      </dia:attribute>\n      <dia:attribute name=\"line_colour\">\n        <dia:color val=\"#000000\"/>\n      </dia:attribute>\n      <dia:attribute name=\"name\">\n        <dia:string>##</dia:string>\n      </dia:attribute>\n      <dia:attribute name=\"stereotype\">\n        <dia:string>#companionOf#</dia:string>\n      </dia:attribute>\n      <dia:attribute name=\"draw_arrow\">\n        <dia:boolean val=\"true\"/>\n      </dia:attribute>\n      <dia:connections>\n        <dia:connection handle=\"0\" to=\"O5\" connection=\"10\"/>\n        <dia:connection handle=\"1\" to=\"O4\" connection=\"10\"/>\n      </dia:connections>\n    </dia:object>"
+  "parseDependency" should "parse a valid <<companionOf>> dependency" in {
+    val elem = xml.XML.loadString(xmlDependency)
+    val res = XmlParserHelper.parseDependency(elem)
+    assert(res == DiaOneWayConnection("O5", "O4", DiaCompanionOfType).some)
   }
 }
