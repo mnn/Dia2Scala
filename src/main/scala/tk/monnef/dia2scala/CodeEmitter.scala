@@ -10,35 +10,39 @@ object CodeEmitter {
   import CodeEmitterHelper._
 
   def emit(file: DiaFile): \/[String, EmittedCode] = {
+    Log.printDebug(s"CodeEmitter.emit:")
     EmittedCode(
-      emitParts(file.classes),
-      file.classes.flatMap(c => c.extendsFrom.map(e => (c.ref.name, e.fullName)))
+      emitParts(file.entities),
+      file.entities.flatMap(c => c.extendsFrom.map(e => (c.ref.fullName, e.fullName)))
     ).right
   }
 }
 
 case class EmittedCode(parts: Seq[EmittedParts], dependencies: Seq[(String, String)])
 
-case class EmittedParts(name: String, inPackage: String, code: String, inFile: String)
+case class EmittedParts(name: String, inPackage: String, code: String, inFile: String, requiredClasses: Seq[String]) {
+  lazy val fullName = (if (inPackage.isEmpty) "" else inPackage + ".") + name
+}
 
 object CodeEmitterHelper {
   def emitClass(c: DiaClass): EmittedParts = {
     val indent = "  "
     def genClass = s"class ${c.ref.name}"
-    def genExtends = c.extendsFrom.nonEmpty ? s" extends ${c.extendsFrom.get.fullName}" | ""
-    def genMixins = if (c.mixins.isEmpty) "" else c.mixins.mkString(" with ", " with ", "")
+    def genExtends = c.extendsFrom.nonEmpty ? s" extends ${c.extendsFrom.get.name}" | ""
+    def genMixins = if (c.mixins.isEmpty) "" else c.mixins.map(_.name).mkString(" with ", " with ", "")
     def genVisibility(v: DiaVisibility) = if (v == DiaVisibility.Public) "" else v.code + " "
-    def genType(t: Option[DiaClassRefBase]): String = t.map(j => {": " + j.emitCode()}).getOrElse("")
+    def genTypePart(t: DiaClassRefBase): String = ": " + t.emitCode()
+    def genOptTypePart(t: Option[DiaClassRefBase]): String = t.map(genTypePart).getOrElse("")
     def genAttributes: Seq[String] = c.attributes.map { a: DiaAttribute =>
       indent +
         genVisibility(a.visibility) +
         "var " +
         a.name +
-        genType(a.aType) +
+        genOptTypePart(a.aType) +
         " = _" +
         ""
     }
-    def genParameter(p: DiaOperationParameter): String = p.name + genType(p.pType)
+    def genParameter(p: DiaOperationParameter): String = p.name + genOptTypePart(p.pType)
     def genOperations: Seq[String] = c.operations.map { o: DiaOperationDescriptor =>
       indent +
         genVisibility(o.visibility) +
@@ -47,11 +51,38 @@ object CodeEmitterHelper {
         "(" +
         o.parameters.map(genParameter).mkString(", ") +
         ")" +
-        o.oType.map(": " + _ + " = ???").getOrElse("{ ??? }") +
+        o.oType.map(t => genTypePart(t) + " = ???").getOrElse("{ ??? }") +
         ""
     }
+    def genImportsForClassRef(cr: DiaClassRefBase): Seq[String] = {
+      cr match {
+        case x: DiaUserClassRef => Seq(x.fullName)
+        case x: DiaGenericClassRef => genImportsForClassRef(x.base) ++ x.params.flatMap(genImportsForClassRef)
+        case x: DiaTupleClassRef => x.params.flatMap(genImportsForClassRef)
+        case _ => Seq()
+      }
+    }
+    def genImportsForClassRefOpt(cr: Option[DiaClassRefBase]): Seq[String] = cr.map(genImportsForClassRef).getOrElse(Seq())
 
-    // TODO: import generation
+    def genImportsForMixins: Seq[String] =
+      (if (c.extendsFrom.isEmpty) Seq() else Seq(c.extendsFrom.get.fullName)) ++
+        c.mixins.map(_.fullName)
+
+    def genImportsForAttributes: Seq[String] = c.attributes.flatMap {_.aType |> genImportsForClassRefOpt}
+
+    def genImportsForOperations: Seq[String] = c.operations.flatMap { o =>
+      (o.oType |> genImportsForClassRefOpt) ++
+        o.parameters.flatMap(_.pType |> genImportsForClassRefOpt)
+    }
+
+    def genImportsForCompanionObject: Seq[String] = if (c.hasCompanionObject) Seq(c.ref.fullName + "._") else Seq()
+
+    def genImports: Seq[String] = {
+      genImportsForMixins ++
+        genImportsForAttributes ++
+        genImportsForOperations ++
+        genImportsForCompanionObject
+    }
 
     val code = (new CodeBuilder).
       addLine(genClass + genExtends + genMixins + " {").
@@ -67,7 +98,8 @@ object CodeEmitterHelper {
       c.ref.name,
       c.ref.inPackage,
       code,
-      c.ref.name.capitalizeFirst + ".scala"
+      c.ref.name.capitalizeFirst + ".scala",
+      genImports
     )
   }
 

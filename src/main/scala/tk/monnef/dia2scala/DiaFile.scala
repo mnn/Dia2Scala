@@ -10,31 +10,31 @@ import scalaz.syntax.std.all._
 import scalaz.Scalaz.ToIdOps
 import scalaz.{\/-, -\/, \/}
 
-case class DiaFile(packages: Seq[DiaPackage], classes: Seq[DiaClass], idToClass: Map[String, DiaClass]) {
+case class DiaFile(packages: Seq[DiaPackage], entities: Seq[DiaClass], idToClass: Map[String, DiaClass]) {
 
   import DiaFile._
 
   def validationErrors(): Seq[String] = {
-    classes.flatMap(_.validationErrors()) ++
+    entities.flatMap(_.validationErrors()) ++
       validatePackages(this) /* ++
       validateClassReferences(this)*/
     // TODO: uncomment after validation is done
   }
 
-  def findClassInAnyPackage(name: String): Seq[DiaClass] = {
-    classes.filter(c => c.ref.name == name)
+  def findEntityInAnyPackage(name: String): Seq[DiaClass] = {
+    entities.filter(c => c.ref.name == name)
   }
 
-  def findClass(fullName: String): Seq[DiaClass] = {
-    findClass(DiaClassRefBase.createUncheckedUserClassRef(fullName))
+  def findEntity(fullName: String): Seq[DiaClass] = {
+    findEntity(DiaClassRefBase.createUncheckedUserClassRef(fullName))
   }
 
-  def findClass(inPackage: String, name: String): Seq[DiaClass] = {
-    findClass(DiaUserClassRef(name, inPackage))
+  def findEntity(inPackage: String, name: String): Seq[DiaClass] = {
+    findEntity(DiaUserClassRef(name, inPackage))
   }
 
-  def findClass(ref: DiaUserClassRef): Seq[DiaClass] = {
-    classes.filter(c => c.ref == ref)
+  def findEntity(ref: DiaUserClassRef): Seq[DiaClass] = {
+    entities.filter(c => c.ref == ref)
   }
 
   def findObject(fullName: String): Seq[DiaClass] = {
@@ -42,10 +42,10 @@ case class DiaFile(packages: Seq[DiaPackage], classes: Seq[DiaClass], idToClass:
   }
 
   def findObject(ref: DiaUserClassRef): Seq[DiaClass] = {
-    findClass(ref).filter(_.classType == DiaClassType.Object)
+    findEntity(ref).filter(_.classType == DiaClassType.Object)
   }
 
-  def classExists(ref: DiaUserClassRef): Boolean = findClass(ref).nonEmpty
+  def entityExists(ref: DiaUserClassRef): Boolean = findEntity(ref).nonEmpty
 
   /*
   def convertType(i: String): Option[\/[String, DiaUserClassRef]] = {
@@ -74,7 +74,7 @@ object DiaFile {
         if (d.nonEmpty) Seq(Seq(s"Duplicate packages detected (${d.mkString(", ")})."))
         else Seq()
       }: Seq[Seq[String]]) ++ {
-        val ep = f.packages.filter(p => !f.classes.exists(c => c.ref.inPackage == p.name))
+        val ep = f.packages.filter(p => !f.entities.exists(c => c.ref.inPackage == p.name))
         if (ep.nonEmpty) Seq(Seq(s"Empty packages detected (${ep.mkString(", ")})."))
         else Seq()
       }: Seq[Seq[String]]
@@ -213,9 +213,9 @@ case object DiaEmptyClassRef extends DiaClassRefBase {
 }
 
 case class DiaUserClassRef(name: String, inPackage: String) extends DiaNonGenericClassRefBase {
-  lazy val fullName = s"$inPackage.$name"
+  lazy val fullName = (if (inPackage.isEmpty) "" else inPackage + ".") + name
 
-  override def emitCode(): String = fullName
+  override def emitCode(): String = name
 }
 
 case class DiaGenericClassRef(base: DiaNonGenericClassRefBase, params: Seq[DiaClassRefBase]) extends DiaClassRefBase {

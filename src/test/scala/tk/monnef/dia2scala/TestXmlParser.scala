@@ -27,7 +27,7 @@ class TestXmlParser extends FlatSpec {
 
   "parseFile" should "read empty diagram" in {
     rightOrFailIn(parsePacked("empty")) { res =>
-      assert(res.classes.isEmpty)
+      assert(res.entities.isEmpty)
       assert(res.packages.isEmpty)
     }
   }
@@ -53,15 +53,15 @@ class TestXmlParser extends FlatSpec {
   it should "read classes and its packages" in {
     rightOrFailIn(parsePacked("simple01")) { res =>
       assert(res.packages.size == 1)
-      assert(res.classes.size == 2, res.classes)
-      assert(res.classes.find(_.ref.name == "ClassA").get.ref.inPackage == "")
-      assert(res.classes.find(_.ref.name == "ClassB").get.ref.inPackage == "packageB")
+      assert(res.entities.size == 2, res.entities)
+      assert(res.entities.find(_.ref.name == "ClassA").get.ref.inPackage == "")
+      assert(res.entities.find(_.ref.name == "ClassB").get.ref.inPackage == "packageB")
     }
   }
 
   it should "parse and process mutable class" in {
     rightOrFailIn(parsePacked("simple03")) { res =>
-      val c = res.findClass("Mutable").head
+      val c = res.findEntity("Mutable").head
       assert(c.mutable)
       assert(!c.immutable)
       assert(!c.attributes(0).isVal)
@@ -70,7 +70,7 @@ class TestXmlParser extends FlatSpec {
 
   it should "parse and process reference to classes in same package" in {
     rightOrFailIn(parsePacked("simple02")) { res =>
-      val c = res.findClassInAnyPackage("ClassC")(0)
+      val c = res.findEntityInAnyPackage("ClassC")(0)
       def getOptUserClassFullName(a: Option[DiaClassRefBase]): String = getUserClassFullName(a.get)
       def getUserClassFullName(a: DiaClassRefBase): String = a.asInstanceOf[DiaUserClassRef].fullName
 
@@ -85,10 +85,10 @@ class TestXmlParser extends FlatSpec {
 
   it should "parse and process object stereotype" in {
     rightOrFailIn(parsePacked("simple03")) { res =>
-      val aObj = res.findClass("A").find(_.classType == DiaClassType.Object).get
+      val aObj = res.findEntity("A").find(_.classType == DiaClassType.Object).get
       assert(aObj.attributes.head.name == "aO")
 
-      val aCls = res.findClass("A").find(_.classType == DiaClassType.Class).get
+      val aCls = res.findEntity("A").find(_.classType == DiaClassType.Class).get
       assert(aCls.hasCompanionObject)
       assert(aCls.attributes.head.name == "a")
     }
@@ -99,7 +99,7 @@ class TestXmlParser extends FlatSpec {
       val bObj = res.findObject("B").head
       assert(bObj.attributes.head.name == "bO")
 
-      val bCls = res.findClass("B").find(_.classType == DiaClassType.Class).get
+      val bCls = res.findEntity("B").find(_.classType == DiaClassType.Class).get
       assert(bCls.hasCompanionObject)
       assert(bCls.attributes.head.name == "b")
     }
@@ -176,7 +176,7 @@ class TestXmlParser extends FlatSpec {
     val f = DiaFile(Seq(), Seq(classFrom, classTo), Map(classIdFrom -> classFrom, classIdTo -> classTo))
     val geneConn = DiaOneWayConnection(classIdFrom, classIdTo, DiaGeneralizationType)
     val res = XmlParserHelper.processGeneralization(OneWayConnectionProcessorData(f, geneConn, Map(classIdFrom -> geneConn), Map(classIdTo -> geneConn)))
-    assert(res.classes.head.extendsFrom.get == classTo.ref)
+    assert(res.entities.head.extendsFrom.get == classTo.ref)
   }
 
   final val xmlRealises = "    <dia:object type=\"UML - Realizes\" version=\"1\" id=\"O17\">\n      <dia:attribute name=\"obj_pos\">\n        <dia:point val=\"14.9825,32.0504\"/>\n      </dia:attribute>\n      <dia:attribute name=\"obj_bb\">\n        <dia:rectangle val=\"14.1325,32.0004;17.7263,36\"/>\n      </dia:attribute>\n      <dia:attribute name=\"meta\">\n        <dia:composite type=\"dict\"/>\n      </dia:attribute>\n      <dia:attribute name=\"orth_points\">\n        <dia:point val=\"14.9825,32.0504\"/>\n        <dia:point val=\"14.9825,34.4\"/>\n        <dia:point val=\"17.6763,34.4\"/>\n        <dia:point val=\"17.6763,35.9495\"/>\n      </dia:attribute>\n      <dia:attribute name=\"orth_orient\">\n        <dia:enum val=\"1\"/>\n        <dia:enum val=\"0\"/>\n        <dia:enum val=\"1\"/>\n      </dia:attribute>\n      <dia:attribute name=\"orth_autoroute\">\n        <dia:boolean val=\"true\"/>\n      </dia:attribute>\n      <dia:attribute name=\"line_colour\">\n        <dia:color val=\"#000000\"/>\n      </dia:attribute>\n      <dia:attribute name=\"text_colour\">\n        <dia:color val=\"#000000\"/>\n      </dia:attribute>\n      <dia:attribute name=\"name\">\n        <dia:string>##</dia:string>\n      </dia:attribute>\n      <dia:attribute name=\"stereotype\">\n        <dia:string>##</dia:string>\n      </dia:attribute>\n      <dia:connections>\n        <dia:connection handle=\"0\" to=\"O13\" connection=\"8\"/>\n        <dia:connection handle=\"1\" to=\"O16\" connection=\"10\"/>\n      </dia:connections>\n      <dia:childnode parent=\"O5\"/>\n    </dia:object>"

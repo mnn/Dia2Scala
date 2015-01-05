@@ -18,6 +18,7 @@ object XmlParser {
   import scalaz._
 
   def parseFile(file: File, isPacked: Boolean): \/[String, DiaFile] = {
+    Log.printDebug(s"XmlParser.parseFile: '${file.getAbsoluteFile}'")
     getXmlStream(file, isPacked) match {
       case scala.util.Failure(t) => s"Unable to create stream reader: ${t.getMessage}".left
       case scala.util.Success(xmlStream) =>
@@ -146,6 +147,7 @@ object XmlParserHelper {
     }
 
   def processPackages(e: Elem, f: DiaFile): \/[String, DiaFile] = {
+    Log.printDebug("processPackages:")
     val packages: \/[String, Seq[DiaPackage]] = extractObjectsByType(e, DiaObjectTypePackage).map(processPackage) |> liftFirstError
     packages.map { p => f.copy(packages = p)}
   }
@@ -291,17 +293,17 @@ object XmlParserHelper {
   }
 
   def assignPackages(f: DiaFile): DiaFile = {
-    val newClasses = f.classes map { c =>
+    val newClasses = f.entities map { c =>
       c.copy(ref = c.ref.copy(inPackage = getPackageForClass(f, c).map(_.name).getOrElse("")))
     }
-    assert(newClasses.size == f.classes.size)
-    f.copy(classes = newClasses)
+    assert(newClasses.size == f.entities.size)
+    f.copy(entities = newClasses)
   }
 
-  def createIdToClassMapping(f: DiaFile): DiaFile = f.copy(idToClass = f.classes.map { c => c.id -> c}.toMap)
+  def createIdToClassMapping(f: DiaFile): DiaFile = f.copy(idToClass = f.entities.map { c => c.id -> c}.toMap)
 
-  def processClassRefInSamePackage(f: DiaFile): DiaFile = f.copy(classes = {
-    val classToPackage = f.classes.map { c => c.ref.name -> c.ref.inPackage}.toMap
+  def processClassRefInSamePackage(f: DiaFile): DiaFile = f.copy(entities = {
+    val classToPackage = f.entities.map { c => c.ref.name -> c.ref.inPackage}.toMap
 
     def handleRef(r: DiaUserClassRef): DiaUserClassRef =
       if (r.inPackage.nonEmpty) r
@@ -322,7 +324,7 @@ object XmlParserHelper {
       parameters = o.parameters.map { p => p.copy(pType = handleOptClassRef(p.pType))}
     )
 
-    f.classes.map {
+    f.entities.map {
       c => c.copy(
         attributes = c.attributes.map(handleAttribute),
         operations = c.operations.map(handleOperation)
@@ -331,19 +333,21 @@ object XmlParserHelper {
   })
 
   def markClassesOfCompanionObjects(f: DiaFile): DiaFile = {
-    val toMark = f.classes.filter(c => c.classType == DiaClassType.Object).map(_.ref)
-    f.copy(classes = f.classes.map { case c =>
+    val toMark = f.entities.filter(c => c.classType == DiaClassType.Object).map(_.ref)
+    f.copy(entities = f.entities.map { case c =>
       if (c.classType == DiaClassType.Class && toMark.contains(c.ref)) c.copy(hasCompanionObject = true)
       else c
     })
   }
 
-  def semiProcessClasses(e: Elem, f: DiaFile): \/[String, DiaFile] =
+  def semiProcessClasses(e: Elem, f: DiaFile): \/[String, DiaFile] = {
+    Log.printDebug("semiProcessClasses:")
     for {
       parsedClasses <- extractObjectsByType(e, DiaObjectTypeClass).map(processClass) |> liftFirstError
-    } yield f.copy(classes = parsedClasses) |>
+    } yield f.copy(entities = parsedClasses) |>
       assignPackages |> createIdToClassMapping |> processClassRefInSamePackage |>
       markClassesOfCompanionObjects
+  }
 
   def parseConnections(n: Node, inversed: Boolean = true): (String, String) = {
     assertNodeName(n, DiaNodeTypeConnections)
@@ -363,7 +367,7 @@ object XmlParserHelper {
   }
 
   def processGeneralization(i: OneWayConnectionProcessorData): DiaFile =
-    i.f.copy(classes = i.f.classes.map { c =>
+    i.f.copy(entities = i.f.entities.map { c =>
       val conn = i.c
       if (c.id == conn.fromId) {
         val toClassRef = i.f.idToClass.get(conn.toId) match {
@@ -389,7 +393,7 @@ object XmlParserHelper {
   }
 
   def processRealizes(i: OneWayConnectionProcessorData): DiaFile =
-    i.f.copy(classes = i.f.classes.map { c =>
+    i.f.copy(entities = i.f.entities.map { c =>
       if (c.id == i.c.fromId) {
         val conn = i.c
         val toClassRef = i.f.idToClass(conn.toId).ref
@@ -415,8 +419,9 @@ object XmlParserHelper {
     cType.map { ct => conn |> {parsedConnectionIdsToOneWayConnection(_, ct)}}
   }
 
-  def processDependency(i: OneWayConnectionProcessorData): DiaFile =
-    i.f.copy(classes = i.f.classes.map { c =>
+  def processDependency(i: OneWayConnectionProcessorData): DiaFile = {
+    println(i.c)
+    i.f.copy(entities = i.f.entities.map { c =>
       if (c.id == i.c.fromId) {
         val conn = i.c
         conn.cType match {
@@ -431,6 +436,7 @@ object XmlParserHelper {
         }
       } else c
     })
+  }
 
   case class OneWayConnectionProcessorData(f: DiaFile, c: DiaOneWayConnection, fromIdToConn: Map[String, DiaOneWayConnection], toIdToConn: Map[String, DiaOneWayConnection])
 
@@ -450,14 +456,17 @@ object XmlParserHelper {
       connections.foldLeft(f) { (acc, item) => processor(OneWayConnectionProcessorData(acc, item, fromIdToConn, toIdToConn))}
     }
 
-  def processOneWayConnections(e: Elem, f: DiaFile): \/[String, DiaFile] =
+  def processOneWayConnections(e: Elem, f: DiaFile): \/[String, DiaFile] = {
+    Log.printDebug("processOneWayConnections:")
     for {
       a <- processOneWayConnection(e, f, DiaObjectTypeGeneralization, parseGeneralization, processGeneralization)
       b <- processOneWayConnection(e, a, DiaObjectTypeRealizes, parseRealizes, processRealizes)
       c <- processOneWayConnection(e, b, DiaObjectTypeDependency, parseDependency, processDependency)
     } yield c
+  }
 
   def processErrors(f: DiaFile): \/[String, DiaFile] = {
+    Log.printDebug("processErrors:")
     val errs = f.validationErrors()
     if (errs.isEmpty) f.right
     else errs.mkString("\n").left
