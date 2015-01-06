@@ -149,6 +149,7 @@ object XmlParserHelper {
   def processPackages(e: Elem, f: DiaFile): \/[String, DiaFile] = {
     Log.printDebug("processPackages:")
     val packages: \/[String, Seq[DiaPackage]] = extractObjectsByType(e, DiaObjectTypePackage).map(processPackage) |> liftFirstError
+    Log.printTrace(packages.toString)
     packages.map { p => f.copy(packages = p)}
   }
 
@@ -341,12 +342,18 @@ object XmlParserHelper {
   }
 
   def semiProcessClasses(e: Elem, f: DiaFile): \/[String, DiaFile] = {
+    def printEntities(label: String, f: DiaFile): DiaFile = {
+      Log.printTrace(s"$label:\n" + f.entities.mkString("\n"))
+      f
+    }
     Log.printDebug("semiProcessClasses:")
     for {
       parsedClasses <- extractObjectsByType(e, DiaObjectTypeClass).map(processClass) |> liftFirstError
-    } yield f.copy(entities = parsedClasses) |>
-      assignPackages |> createIdToClassMapping |> processClassRefInSamePackage |>
-      markClassesOfCompanionObjects
+    } yield f.copy(entities = parsedClasses) |> {printEntities("raw", _)} |>
+      assignPackages |> {printEntities("assignPackages", _)} |>
+      createIdToClassMapping |> {printEntities("createIdToClassMapping", _)} |>
+      processClassRefInSamePackage |> {printEntities("processClassRefInSamePackage", _)} |>
+      markClassesOfCompanionObjects |> {printEntities("markClassesOfCompanionObjects", _)}
   }
 
   def parseConnections(n: Node, inversed: Boolean = true): (String, String) = {

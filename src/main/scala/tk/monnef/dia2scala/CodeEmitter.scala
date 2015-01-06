@@ -11,10 +11,12 @@ object CodeEmitter {
 
   def emit(file: DiaFile): \/[String, EmittedCode] = {
     Log.printDebug(s"CodeEmitter.emit:")
-    EmittedCode(
+    val r = EmittedCode(
       emitParts(file.entities),
-      file.entities.flatMap(c => c.extendsFrom.map(e => (c.ref.fullName, e.fullName)))
+      file.entities.flatMap(c => c.extendsFrom.map(e => (c.ref.emitCodeWithFullName(), e.emitCodeWithFullName())))
     ).right
+    Log.printTrace(s"res:\n${r.toString}")
+    r
   }
 }
 
@@ -27,22 +29,35 @@ case class EmittedParts(name: String, inPackage: String, code: String, inFile: S
 object CodeEmitterHelper {
   def emitClass(c: DiaClass): EmittedParts = {
     val indent = "  "
-    def genClass = s"class ${c.ref.name}"
-    def genExtends = c.extendsFrom.nonEmpty ? s" extends ${c.extendsFrom.get.name}" | ""
-    def genMixins = if (c.mixins.isEmpty) "" else c.mixins.map(_.name).mkString(" with ", " with ", "")
+    def genClass = (c.classType match {
+      case DiaClassType.Class => "class"
+      case DiaClassType.Object | DiaClassType.Enumeration => "object"
+      case DiaClassType.Trait => "trait"
+    }) + s" ${c.ref.name}"
+
+    def genExtends = (if (c.classType == DiaClassType.Enumeration) DiaClassRefBase.fromStringUnchecked("Enumeration") else c.extendsFrom).
+      map(ef => s" extends ${ef.emitCode()}").getOrElse("")
+
+    def genMixins = if (c.mixins.isEmpty) "" else c.mixins.map(_.emitCode()).mkString(" with ", " with ", "")
+
     def genVisibility(v: DiaVisibility) = if (v == DiaVisibility.Public) "" else v.code + " "
+
     def genTypePart(t: DiaClassRefBase): String = ": " + t.emitCode()
+
     def genOptTypePart(t: Option[DiaClassRefBase]): String = t.map(genTypePart).getOrElse("")
+
     def genAttributes: Seq[String] = c.attributes.map { a: DiaAttribute =>
       indent +
         genVisibility(a.visibility) +
-        "var " +
+        (if (a.isVal) "val " else "var ") +
         a.name +
         genOptTypePart(a.aType) +
         " = _" +
         ""
     }
+
     def genParameter(p: DiaOperationParameter): String = p.name + genOptTypePart(p.pType)
+
     def genOperations: Seq[String] = c.operations.map { o: DiaOperationDescriptor =>
       indent +
         genVisibility(o.visibility) +
@@ -54,6 +69,7 @@ object CodeEmitterHelper {
         o.oType.map(t => genTypePart(t) + " = ???").getOrElse("{ ??? }") +
         ""
     }
+
     def genImportsForClassRef(cr: DiaClassRefBase): Seq[String] = {
       cr match {
         case x: DiaUserClassRef => Seq(x.fullName)
@@ -62,11 +78,12 @@ object CodeEmitterHelper {
         case _ => Seq()
       }
     }
+
     def genImportsForClassRefOpt(cr: Option[DiaClassRefBase]): Seq[String] = cr.map(genImportsForClassRef).getOrElse(Seq())
 
     def genImportsForMixins: Seq[String] =
-      (if (c.extendsFrom.isEmpty) Seq() else Seq(c.extendsFrom.get.fullName)) ++
-        c.mixins.map(_.fullName)
+      (if (c.extendsFrom.isEmpty) Seq() else Seq(c.extendsFrom.get.emitCodeWithFullName())) ++
+        c.mixins.map(_.emitCodeWithFullName())
 
     def genImportsForAttributes: Seq[String] = c.attributes.flatMap {_.aType |> genImportsForClassRefOpt}
 
@@ -84,15 +101,37 @@ object CodeEmitterHelper {
         genImportsForCompanionObject
     }
 
-    val code = (new CodeBuilder).
-      addLine(genClass + genExtends + genMixins + " {").
-      addLineSeq(genAttributes).
-      addLine().
-      setMaximumOfSuccessiveBlankLines(2).
-      addLineSeq(genOperations, doubleNewLines = true).
-      setMaximumOfSuccessiveBlankLines(1).
-      addLine("}").
-      convertToString
+    def emitClassHeader(cb: CodeBuilder): CodeBuilder = {
+      cb.
+        addLine(genClass + genExtends + genMixins + " {")
+    }
+
+    def emitClassBody(cb: CodeBuilder): CodeBuilder = {
+      cb |> { cb: CodeBuilder => if (c.classType == DiaClassType.Enumeration) {
+        cb.
+          addLine(indent + s"type ${c.ref.emitCode()} = Value").
+          addLine(indent + "val " + c.attributes.map(_.name).mkString(", ") + " = Value")
+      } else {
+        cb.
+          addLineSeq(genAttributes)
+      }
+      } |> { cb: CodeBuilder =>
+        cb.
+          addLine().
+          setMaximumOfSuccessiveBlankLines(2).
+          addLineSeq(genOperations, doubleNewLines = true).
+          setMaximumOfSuccessiveBlankLines(1)
+      }
+    }
+
+    def emitClassEnding(cb: CodeBuilder): CodeBuilder = {
+      cb.
+        setMaximumOfSuccessiveBlankLines(1).
+        addLine("}")
+    }
+
+    val code = new CodeBuilder |>
+      emitClassHeader |> emitClassBody |> emitClassEnding |> {_.convertToString}
 
     EmittedParts(
       c.ref.name,

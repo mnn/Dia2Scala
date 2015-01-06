@@ -7,6 +7,8 @@ import scalaz._
 import Scalaz._
 import Utils._
 
+// TODO: fix objects not being grouped wiht its classes/traits
+
 object CodeWriter {
   def writeTextFile(data: EmittedCode, path: String, groupByDependency: Boolean): \/[String, CodeWriterSuccess.type] = {
     Log.printDebug(s"CodeWriter.writeTextFile:")
@@ -22,6 +24,8 @@ object CodeWriter {
         classes.flatMap(_.requiredClasses).distinct.filter(i => !classes.exists(_.fullName == i)).sorted
         )
     }
+
+    Log.printTrace(s"inFileToClassesWithImports = \n${inFileToClassesWithImports.toString()}")
 
     for {(scFile, classes, imports) <- inFileToClassesWithImports} {
       val c = classes.head
@@ -49,10 +53,16 @@ object CodeWriter {
     val sortedNames: Seq[Seq[String]] = Utils.topologicalSortWithGrouping(data.dependencies)
     val nameToEmittedClass = data.parts.map(p => p.fullName -> p).toMap
     val sorted: Seq[Seq[EmittedParts]] = sortedNames.map {_.map {nameToEmittedClass(_)}}
+
+    val notDependent: Map[String, Seq[EmittedParts]] = data.parts.filter { part =>
+      val pName = part.fullName
+      !data.dependencies.exists { case (a, b) => a == pName || b == pName}
+    }.map { part => (part.inFile, Seq(part))}.toMap
+
     sorted.map { case sortedPartsSeq =>
       val masterPartFileName = sortedPartsSeq.head.inFile
       (masterPartFileName, sortedPartsSeq.map {_.copy(inFile = masterPartFileName)})
-    }.toMap
+    }.toMap ++ notDependent
   }
 }
 

@@ -164,6 +164,8 @@ case class DiaPackage(name: String, geometry: DiaGeometry) extends Checkable {
 
 abstract class DiaClassRefBase {
   def emitCode(): String
+
+  def emitCodeWithFullName(): String = emitCode()
 }
 
 object DiaClassRefBase {
@@ -187,6 +189,7 @@ object DiaClassRefBase {
   }
 
   def fromStringUncheckedEmptyAllowed(i: String): DiaClassRefBase = fromStringUnchecked(i).getOrElse(DiaEmptyClassRef)
+
 }
 
 abstract class DiaNonGenericClassRefBase extends DiaClassRefBase {
@@ -216,6 +219,8 @@ case class DiaUserClassRef(name: String, inPackage: String) extends DiaNonGeneri
   lazy val fullName = (if (inPackage.isEmpty) "" else inPackage + ".") + name
 
   override def emitCode(): String = name
+
+  override def emitCodeWithFullName(): String = fullName
 }
 
 case class DiaGenericClassRef(base: DiaNonGenericClassRefBase, params: Seq[DiaClassRefBase]) extends DiaClassRefBase {
@@ -351,7 +356,7 @@ object DiaTupleClassRef {
     }
 }
 
-case class DiaClass(ref: DiaUserClassRef, geometry: DiaGeometry, extendsFrom: Option[DiaUserClassRef], mixins: Seq[DiaUserClassRef], id: String, attributes: Seq[DiaAttribute], operations: Seq[DiaOperationDescriptor], classType: DiaClassType, mutable: Boolean, immutable: Boolean, hasCompanionObject: Boolean) extends Checkable {
+case class DiaClass(ref: DiaUserClassRef, geometry: DiaGeometry, extendsFrom: Option[DiaClassRefBase], mixins: Seq[DiaClassRefBase], id: String, attributes: Seq[DiaAttribute], operations: Seq[DiaOperationDescriptor], classType: DiaClassType, mutable: Boolean, immutable: Boolean, hasCompanionObject: Boolean) extends Checkable {
   override def validationErrors(): Seq[String] = {
     ({
       if (ref.name.trim.isEmpty) Seq(Seq(s"Class with empty name ($id)."))
