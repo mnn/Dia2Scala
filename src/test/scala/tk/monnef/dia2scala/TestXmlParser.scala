@@ -207,4 +207,20 @@ class TestXmlParser extends FlatSpec {
     val res = XmlParserHelper.parseDependency(elem)
     assert(res == DiaOneWayConnection("O5", "O4", DiaCompanionOfType).some)
   }
+
+  "parseAssociationPoint" should "parse a valid association point" in {
+    fail()
+  }
+
+  "MultiplicityType.parseMultiplicityString" should "parse multiplicity strings" in {
+    fail()
+  }
+
+  "processParsedAssociation" should "process one side of an association" in {
+    fail()
+  }
+
+  "processAssociation" should "process an association node" in {
+    fail()
+  }
 }

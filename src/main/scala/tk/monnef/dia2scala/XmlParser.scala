@@ -1,6 +1,7 @@
 package tk.monnef.dia2scala
 
 import java.io.{File, FileInputStream, InputStream, InputStreamReader}
+import java.util.regex.Pattern
 import java.util.zip.GZIPInputStream
 
 import tk.monnef.dia2scala.DiaClassRefBase.fromStringUnchecked
@@ -9,6 +10,7 @@ import tk.monnef.dia2scala.DiaVisibility.DiaVisibility
 import tk.monnef.dia2scala.Utils._
 
 import scala.util.Try
+import scala.util.matching.Regex
 
 object XmlParser {
 
@@ -39,8 +41,9 @@ object XmlParser {
           a <- processPackages(xml, DiaFile())
           b <- semiProcessClasses(xml, a)
           c <- processOneWayConnections(xml, b)
-          d <- processErrors(c)
-        } yield d
+          d <- processAssociations(xml, c)
+          e <- processErrors(d)
+        } yield e
     }
   }
 }
@@ -69,6 +72,7 @@ object XmlParserHelper {
   final val DiaObjectTypeGeneralization = "UML - Generalization"
   final val DiaObjectTypeRealizes = "UML - Realizes"
   final val DiaObjectTypeDependency = "UML - Dependency"
+  final val DiaObjectTypeAssociation = "UML - Association"
 
   final val DiaCompositeTypeUMLAttribute = "umlattribute"
   final val DiaCompositeTypeUMLOperation = "umloperation"
@@ -187,23 +191,7 @@ object XmlParserHelper {
   def processAttribute(n: Node, isClassVal: Option[Boolean]): DiaAttribute = {
     assertAttributeType(n, DiaCompositeTypeUMLAttribute)
     val nameField = extractAttributeName(n)
-    val (name: String, isVal: Boolean) = {
-      if (nameField.startsWith("<<")) {
-        AttributeStereotypesPattern.findFirstMatchIn(nameField) match {
-          case Some(rMatch) =>
-            val stereo = rMatch.group(1)
-            val name = rMatch.group(2)
-            if (!ValidAttrStereos.contains(stereo)) {
-              Log.printInfo(s"Skipping unknown attribute stereotype '$stereo'.")
-              (name, true)
-            } else {
-              ensureAttributeObeysClassStereotypes(stereo, isClassVal, name)
-              (name, stereo != AttrStereoVar)
-            }
-          case None => throw new RuntimeException(s"Failed to parse an attribute with stereotype: '$nameField'")
-        }
-      } else (nameField, true)
-    }
+    val (name: String, isVal: Boolean) = parseAttributeNameAndIsValFromName(isClassVal, nameField)
 
     DiaAttribute(
       name,
@@ -213,6 +201,23 @@ object XmlParserHelper {
       extractDiaAttributeStringAndStrip(n, DiaAttributeValue) |> wrapNonEmptyStringToSome
     )
   }
+
+  def parseAttributeNameAndIsValFromName(isClassVal: Option[Boolean], nameField: String): (String, Boolean) =
+    if (nameField.startsWith("<<")) {
+      AttributeStereotypesPattern.findFirstMatchIn(nameField) match {
+        case Some(rMatch) =>
+          val stereo = rMatch.group(1)
+          val name = rMatch.group(2)
+          if (!ValidAttrStereos.contains(stereo)) {
+            Log.printInfo(s"Skipping unknown attribute stereotype '$stereo'.")
+            (name, true)
+          } else {
+            ensureAttributeObeysClassStereotypes(stereo, isClassVal, name)
+            (name, stereo != AttrStereoVar)
+          }
+        case None => throw new RuntimeException(s"Failed to parse an attribute with stereotype: '$nameField'")
+      }
+    } else (nameField, true)
 
   def processParameter(n: Node): DiaOperationParameter = {
     assertAttributeType(n, DiaCompositeTypeUMLParameter)
@@ -479,4 +484,71 @@ object XmlParserHelper {
     else errs.mkString("\n").left
   }
 
+  case class AssociationPointParsed(role: String, multiplicity: String, visibility: DiaVisibility, showArrow: Boolean)
+
+  def parseAssociationPoint(n: Node, suffix: String): AssociationPointParsed = {
+    AssociationPointParsed(
+      extractDiaAttributeString(n, "role_" + suffix),
+      extractDiaAttributeString(n, "multipicity_" + suffix),
+      extractVisibility(n, "visibility_" + suffix),
+      extractDiaAttributeBoolean(n, "show_arrow_" + suffix)
+    )
+  }
+
+  object MultiplicityType extends Enumeration {
+    type MultiplicityType = Value
+    val One, ZeroToOne, AnyToStar = Value
+
+    private val PatternOne = "1".r
+    private val PatternZeroToOne = "0((..)|(-))1".r
+    private val PatternZeroStar = "[01]((..)|(-))[\\*n]".r
+
+    def parseMultiplicityString(s: String): Option[MultiplicityType] = s.replaceAll("\\s", "") match {
+      case PatternOne(_) => One.some
+      case PatternZeroToOne(_) => ZeroToOne.some
+      case PatternZeroStar(_) => AnyToStar.some
+      case _ => None
+    }
+  }
+
+  def processParsedAssociation(point: AssociationPointParsed, fromId: String, toId: String, f: DiaFile): DiaFile =
+    if (!point.showArrow) f // no arrow - no attribute created on this side
+    else {
+      // TODO: support for default values
+      /*[Class From] ---------> [Class To]
+                              ^------- current association */
+      val classTo = f.idToClass(toId)
+      val (nameWithStereotype, aType) = point.role.split(":") |> {
+        case a if a.size == 2 => (a(0), a(1) |> DiaClassRefBase.fromStringUnchecked)
+        case a =>
+          // no type defined by user, selecting appropriate one respecting multiplicity
+          val clToRef = classTo.ref
+          val finalType = MultiplicityType.parseMultiplicityString(point.multiplicity) match {
+            case Some(mul) => mul match {
+              case MultiplicityType.One => clToRef
+              case MultiplicityType.ZeroToOne => DiaGenericClassRef(DiaScalaClassRef("Option"), Seq(clToRef))
+            }
+            case None => clToRef
+          }
+          (a(0), finalType.some)
+      }
+      val (name, isVal) = parseAttributeNameAndIsValFromName(f.idToClass(fromId).immutable.some, nameWithStereotype)
+
+      f.copy(entities = f.entities.map { c =>
+        if (c.id == fromId) {
+          c.copy(attributes = c.attributes :+ DiaAttribute(name, aType, point.visibility, isVal, None))
+        } else c
+      })
+    }
+
+  def processAssociation(n: Node, f: DiaFile): DiaFile = {
+    val (startId, stopId) = parseConnections((n \ DiaNodeTypeConnections).head)
+    val (assocPointA, assocPointB) = (parseAssociationPoint(n, "a"), parseAssociationPoint(n, "b"))
+    processParsedAssociation(assocPointA, startId, stopId, f) |> {processParsedAssociation(assocPointB, stopId, startId, _)}
+  }
+
+  def processAssociations(e: Elem, f: DiaFile): \/[String, DiaFile] = wrapErrorToJunction {
+    Log.printDebug("processAssociations:")
+    extractObjectsByType(e, DiaObjectTypeAssociation).foldLeft(f) { case (file, node) => processAssociation(node, file)}
+  }
 }
