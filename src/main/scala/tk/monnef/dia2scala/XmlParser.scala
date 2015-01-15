@@ -488,8 +488,8 @@ object XmlParserHelper {
 
   def parseAssociationPoint(n: Node, suffix: String): AssociationPointParsed = {
     AssociationPointParsed(
-      extractDiaAttributeString(n, "role_" + suffix),
-      extractDiaAttributeString(n, "multipicity_" + suffix),
+      extractDiaAttributeStringAndStrip(n, "role_" + suffix),
+      extractDiaAttributeStringAndStrip(n, "multipicity_" + suffix),
       extractVisibility(n, "visibility_" + suffix),
       extractDiaAttributeBoolean(n, "show_arrow_" + suffix)
     )
@@ -526,7 +526,8 @@ object XmlParserHelper {
           val finalType = MultiplicityType.parseMultiplicityString(point.multiplicity) match {
             case Some(mul) => mul match {
               case MultiplicityType.One => clToRef
-              case MultiplicityType.ZeroToOne => DiaGenericClassRef(DiaScalaClassRef("Option"), Seq(clToRef))
+              case MultiplicityType.ZeroToOne => DiaGenericClassRef.createOption(clToRef)
+              case MultiplicityType.AnyToStar => DiaGenericClassRef.createSeq(clToRef)
             }
             case None => clToRef
           }

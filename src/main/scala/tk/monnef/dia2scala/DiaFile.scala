@@ -262,6 +262,10 @@ object DiaGenericClassRef {
 
     loop(i, "", 0, Seq())
   }
+
+  def createOption(inner: DiaClassRefBase): DiaGenericClassRef = DiaGenericClassRef(DiaScalaClassRef("Option"), Seq(inner))
+
+  def createSeq(inner: DiaClassRefBase): DiaGenericClassRef = DiaGenericClassRef(DiaScalaClassRef("Seq"), Seq(inner))
 }
 
 case class DiaFunctionClassRef(inputs: Seq[DiaClassRefBase], output: DiaClassRefBase) extends DiaClassRefBase {
