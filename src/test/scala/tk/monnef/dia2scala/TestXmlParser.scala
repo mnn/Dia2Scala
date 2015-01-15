@@ -208,12 +208,22 @@ class TestXmlParser extends FlatSpec {
     assert(res == DiaOneWayConnection("O5", "O4", DiaCompanionOfType).some)
   }
 
+  final val xmlAssociation = " <dia:object type=\"UML - Association\" version=\"2\" id=\"O4\">\n      <dia:attribute name=\"name\">\n        <dia:string>##</dia:string>\n      </dia:attribute>\n      <dia:attribute name=\"direction\">\n        <dia:enum val=\"1\"/>\n      </dia:attribute>\n      <dia:attribute name=\"show_direction\">\n        <dia:boolean val=\"false\"/>\n      </dia:attribute>\n      <dia:attribute name=\"assoc_type\">\n        <dia:enum val=\"0\"/>\n      </dia:attribute>\n      <dia:attribute name=\"role_a\">\n        <dia:string>##</dia:string>\n      </dia:attribute>\n      <dia:attribute name=\"multipicity_a\">\n        <dia:string>##</dia:string>\n      </dia:attribute>\n      <dia:attribute name=\"visibility_a\">\n        <dia:enum val=\"0\"/>\n      </dia:attribute>\n      <dia:attribute name=\"show_arrow_a\">\n        <dia:boolean val=\"false\"/>\n      </dia:attribute>\n      <dia:attribute name=\"role_b\">\n        <dia:string>#bReference#</dia:string>\n      </dia:attribute>\n      <dia:attribute name=\"multipicity_b\">\n        <dia:string>##</dia:string>\n      </dia:attribute>\n      <dia:attribute name=\"visibility_b\">\n        <dia:enum val=\"0\"/>\n      </dia:attribute>\n      <dia:attribute name=\"show_arrow_b\">\n        <dia:boolean val=\"true\"/>\n      </dia:attribute>\n      <dia:attribute name=\"obj_pos\">\n        <dia:point val=\"4.73625,8.2\"/>\n      </dia:attribute>\n      <dia:attribute name=\"obj_bb\">\n        <dia:rectangle val=\"4.68625,6.35;23.2325,9.8\"/>\n      </dia:attribute>\n      <dia:attribute name=\"meta\">\n        <dia:composite type=\"dict\"/>\n      </dia:attribute>\n      <dia:attribute name=\"orth_points\">\n        <dia:point val=\"4.73625,8.2\"/>\n        <dia:point val=\"4.73625,9.25\"/>\n        <dia:point val=\"18.8325,9.25\"/>\n        <dia:point val=\"18.8325,6.4\"/>\n      </dia:attribute>\n      <dia:attribute name=\"orth_orient\">\n        <dia:enum val=\"1\"/>\n        <dia:enum val=\"0\"/>\n        <dia:enum val=\"1\"/>\n      </dia:attribute>\n      <dia:attribute name=\"orth_autoroute\">\n        <dia:boolean val=\"true\"/>\n      </dia:attribute>\n      <dia:attribute name=\"text_colour\">\n        <dia:color val=\"#000000\"/>\n      </dia:attribute>\n      <dia:attribute name=\"line_colour\">\n        <dia:color val=\"#000000\"/>\n      </dia:attribute>\n      <dia:connections>\n        <dia:connection handle=\"0\" to=\"O1\" connection=\"6\"/>\n        <dia:connection handle=\"1\" to=\"O2\" connection=\"6\"/>\n      </dia:connections>\n    </dia:object>"
   "parseAssociationPoint" should "parse a valid association point" in {
     fail()
   }
 
   "MultiplicityType.parseMultiplicityString" should "parse multiplicity strings" in {
-    fail()
+    import XmlParserHelper.MultiplicityType
+    assert(MultiplicityType.parseMultiplicityString("1") == Some(MultiplicityType.One))
+    assert(MultiplicityType.parseMultiplicityString("0..n") == Some(MultiplicityType.AnyToStar))
+    assert(MultiplicityType.parseMultiplicityString("0 .. n") == Some(MultiplicityType.AnyToStar))
+    assert(MultiplicityType.parseMultiplicityString("0-n") == Some(MultiplicityType.AnyToStar))
+    assert(MultiplicityType.parseMultiplicityString("0 - n") == Some(MultiplicityType.AnyToStar))
+    assert(MultiplicityType.parseMultiplicityString("0-1") == Some(MultiplicityType.ZeroToOne))
+    assert(MultiplicityType.parseMultiplicityString("0 - 1") == Some(MultiplicityType.ZeroToOne))
+    assert(MultiplicityType.parseMultiplicityString("0..1") == Some(MultiplicityType.ZeroToOne))
+    assert(MultiplicityType.parseMultiplicityString("0 .. 1") == Some(MultiplicityType.ZeroToOne))
   }
 
   "processParsedAssociation" should "process one side of an association" in {

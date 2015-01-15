@@ -499,14 +499,14 @@ object XmlParserHelper {
     type MultiplicityType = Value
     val One, ZeroToOne, AnyToStar = Value
 
-    private val PatternOne = "1".r
-    private val PatternZeroToOne = "0((..)|(-))1".r
-    private val PatternZeroStar = "[01]((..)|(-))[\\*n]".r
+    private val patternOne = "1".r
+    private val patternZeroToOne = "0(?:(?:..)|-)1".r
+    private val patternZeroStar = "[01](?:(?:..)|-)[\\*n]".r
 
     def parseMultiplicityString(s: String): Option[MultiplicityType] = s.replaceAll("\\s", "") match {
-      case PatternOne(_) => One.some
-      case PatternZeroToOne(_) => ZeroToOne.some
-      case PatternZeroStar(_) => AnyToStar.some
+      case patternOne() => One.some
+      case patternZeroToOne() => ZeroToOne.some
+      case patternZeroStar() => AnyToStar.some
       case _ => None
     }
   }
