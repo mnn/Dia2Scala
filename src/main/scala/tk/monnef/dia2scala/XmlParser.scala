@@ -4,6 +4,7 @@ import java.io.{File, FileInputStream, InputStream, InputStreamReader}
 import java.util.regex.Pattern
 import java.util.zip.GZIPInputStream
 
+import tk.monnef.dia2scala.DiaClassRefBase
 import tk.monnef.dia2scala.DiaClassRefBase.fromStringUnchecked
 import tk.monnef.dia2scala.DiaClassType._
 import tk.monnef.dia2scala.DiaVisibility.DiaVisibility
@@ -42,8 +43,9 @@ object XmlParser {
           b <- semiProcessClasses(xml, a)
           c <- processOneWayConnections(xml, b)
           d <- processAssociations(xml, c)
-          e <- processErrors(d)
-        } yield e
+          e <- processClassRefInSamePackageWrapped(xml, d)
+          f <- processErrors(e)
+        } yield f
     }
   }
 }
@@ -308,22 +310,36 @@ object XmlParserHelper {
 
   def createIdToClassMapping(f: DiaFile): DiaFile = f.copy(idToClass = f.entities.map { c => c.id -> c}.toMap)
 
+  def processClassRefInSamePackageWrapped(e: Elem, f: DiaFile): \/[String, DiaFile] = wrapErrorToJunction {
+    processClassRefInSamePackage(f) |> {printEntities("processClassRefInSamePackageWrapped:", _)}
+  }
+
   def processClassRefInSamePackage(f: DiaFile): DiaFile = f.copy(entities = {
     val classToPackage = f.entities.map { c => c.ref.name -> c.ref.inPackage}.toMap
 
-    def handleRef(r: DiaUserClassRef): DiaUserClassRef =
+    def handleUserClassRef(r: DiaUserClassRef): DiaUserClassRef =
       if (r.inPackage.nonEmpty) r
       else classToPackage.get(r.name) match {
         case Some(pck) => r.copy(inPackage = pck)
         case None => r
       }
 
+    def handleGenericClassRef(r: DiaGenericClassRef): DiaGenericClassRef = r.copy(base = handleClassRef(r.base).asInstanceOf[DiaNonGenericClassRefBase], params = r.params.map(handleClassRef))
+
+    def handleFunctionClassRef(r: DiaFunctionClassRef): DiaFunctionClassRef = r // TODO: function same package handling
+
+    def handleClassRef[T >: DiaClassRefBase](r: T): T = {
+      r match {
+        case uc: DiaUserClassRef => handleUserClassRef(uc)
+        case gc: DiaGenericClassRef => handleGenericClassRef(gc)
+        case fc: DiaFunctionClassRef => handleFunctionClassRef(fc)
+        case _ => r
+      }
+    }
+
     def handleAttribute(a: DiaAttribute): DiaAttribute = a.copy(aType = handleOptClassRef(a.aType))
 
-    def handleOptClassRef(r: Option[DiaClassRefBase]): Option[DiaClassRefBase] = r match {
-      case Some(userClass: DiaUserClassRef) => handleRef(userClass).some
-      case _ => r
-    }
+    def handleOptClassRef(r: Option[DiaClassRefBase]): Option[DiaClassRefBase] = r.map(handleClassRef)
 
     def handleOperation(o: DiaOperationDescriptor): DiaOperationDescriptor = o.copy(
       oType = handleOptClassRef(o.oType),
@@ -346,18 +362,28 @@ object XmlParserHelper {
     })
   }
 
+  def formatEntity(e: DiaClass): String = {
+    e.ref.fullName + s" [${e.id}] -> " + e.ref + " (" + e.classType + ")\n" +
+      "extends from " + e.extendsFrom.mkString(", ") + s", mixins:  ${e.mixins.mkString(", ")}\n" +
+      e.geometry + "\n" +
+      s"immutable: ${e.immutable}, mutable: ${e.mutable}, hasCompanionObject: ${e.hasCompanionObject}\n" +
+      e.attributes.mkString("  ", "\n  ", "\n") +
+      "---\n" +
+      e.operations.mkString("  ", "\n  ", "\n")
+  }
+
+  def printEntities(label: String, f: DiaFile): DiaFile = {
+    Log.printTrace(s"$label:\n" + f.entities.map(formatEntity).mkString("\n") + "\n\n")
+    f
+  }
+
   def semiProcessClasses(e: Elem, f: DiaFile): \/[String, DiaFile] = {
-    def printEntities(label: String, f: DiaFile): DiaFile = {
-      Log.printTrace(s"$label:\n" + f.entities.mkString("\n"))
-      f
-    }
     Log.printDebug("semiProcessClasses:")
     for {
       parsedClasses <- extractObjectsByType(e, DiaObjectTypeClass).map(processClass) |> liftFirstError
     } yield f.copy(entities = parsedClasses) |> {printEntities("raw", _)} |>
       assignPackages |> {printEntities("assignPackages", _)} |>
       createIdToClassMapping |> {printEntities("createIdToClassMapping", _)} |>
-      processClassRefInSamePackage |> {printEntities("processClassRefInSamePackage", _)} |>
       markClassesOfCompanionObjects |> {printEntities("markClassesOfCompanionObjects", _)}
   }
 

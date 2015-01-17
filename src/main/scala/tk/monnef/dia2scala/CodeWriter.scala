@@ -19,6 +19,8 @@ object CodeWriter {
       if (!groupByDependency) data.parts.groupBy(_.inFile)
       else groupAndSortByInheritance(data)
 
+    Log.printTrace(s"inFileToClasses, required classes view:\n" + inFileToClasses.map { case (scFile, classes) => scFile + ":\n" + classes.map { case c => c.fullName + " -> " + c.requiredClasses}.mkString("\n") + "\n"}.mkString("\n") + "\n")
+
     val inFileToClassesWithImports = inFileToClasses.map { case (scFile, classes) =>
       (scFile, classes,
         classes.flatMap(_.requiredClasses).distinct.filter(i => !classes.exists(_.fullName == i)).sorted
