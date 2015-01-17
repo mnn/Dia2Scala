@@ -538,9 +538,10 @@ object XmlParserHelper {
   }
 
   def processParsedAssociation(point: AssociationPointParsed, fromId: String, toId: String, f: DiaFile): DiaFile =
+  // TODO: other types than association - aggregation and composition
     if (!point.showArrow) f // no arrow - no attribute created on this side
     else {
-      // TODO: support for default values
+      // TODO: [low priority] support for default values
       /*[Class From] ---------> [Class To]
                               ^------- current association */
       val classTo = f.idToClass(toId)

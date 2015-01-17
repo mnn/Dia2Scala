@@ -7,7 +7,7 @@ import scalaz._
 import Scalaz._
 import Utils._
 
-// TODO: fix objects not being grouped wiht its classes/traits
+// TODO: fix objects not being grouped with its classes/traits
 
 object CodeWriter {
   def writeTextFile(data: EmittedCode, path: String, groupByDependency: Boolean): \/[String, CodeWriterSuccess.type] = {

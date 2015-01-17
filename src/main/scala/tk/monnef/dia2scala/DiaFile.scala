@@ -203,7 +203,7 @@ case class DiaScalaClassRef(name: String) extends DiaNonGenericClassRefBase {
 }
 
 object DiaScalaClassRef {
-  final val ScalaClasses = Seq("Seq", "Int", "String", "Double", "Float", "Map", "List", "Set", "Option", "Either", "Char", "Boolean", "Byte", "Short", "Long", "Any", "AnyVal", "AnyRef", "Unit")
+  final val ScalaClasses = Seq("Seq", "Int", "String", "Double", "Float", "Map", "List", "Set", "Option", "Either", "Char", "Boolean", "Byte", "Short", "Long", "Any", "AnyVal", "AnyRef", "Unit", "Array", "Queue", "PriorityQueue")
 
   def fromString(name: String): DiaScalaClassRef = {
     if (!ScalaClasses.contains(name)) throw new RuntimeException(s"Class name '$name' is not a Scala type.")
