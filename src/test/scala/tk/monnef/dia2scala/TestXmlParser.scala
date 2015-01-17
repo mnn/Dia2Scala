@@ -1,6 +1,7 @@
 package tk.monnef.dia2scala
 
 import java.io.File
+import tk.monnef.dia2scala.DiaAttribute
 import tk.monnef.dia2scala.DiaClassRefBase.createUncheckedUserClassRef
 import tk.monnef.dia2scala.XmlParserHelper.{AssociationPointParsed, OneWayConnectionProcessorData}
 
@@ -232,16 +233,6 @@ class TestXmlParser extends FlatSpec {
     assert(MultiplicityType.parseMultiplicityString("0 .. 1") == Some(MultiplicityType.ZeroToOne))
   }
 
-  /*
-  "processParsedAssociation" should "process one side of an association" in {
-    fail()
-  }
-
-  "processAssociation" should "process an association node" in {
-    fail()
-  }
-  */
-
   "processAssociations" should "process all association nodes" in {
     rightOrFailIn(parsePacked("simple03")) { res =>
       val srcCName = "AssoccSource"
@@ -257,7 +248,13 @@ class TestXmlParser extends FlatSpec {
       val targetRefMany = DiaGenericClassRef.createSeq(DiaClassRefBase.createUncheckedUserClassRef(targCName))
       val targetRefOver = DiaGenericClassRef.createOption(DiaClassRefBase.createUncheckedUserClassRef(targCName))
 
-      fail() // TODO: compare remaining associations
+      val expAttrs: Set[DiaAttribute] = Set(
+        DiaAttribute("targetRefDef", targetRefDef.some, DiaVisibility.Public, true, None),
+        DiaAttribute("targetRefMany", targetRefMany.some, DiaVisibility.Public, true, None),
+        DiaAttribute("targetRefOver", targetRefOver.some, DiaVisibility.Private, false, None)
+      )
+
+      assert(src.attributes.toSet == expAttrs)
     }
   }
 }
