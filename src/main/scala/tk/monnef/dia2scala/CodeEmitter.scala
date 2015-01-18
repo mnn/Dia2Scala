@@ -13,7 +13,7 @@ object CodeEmitter {
     Log.printDebug(s"CodeEmitter.emit:")
     val r = EmittedCode(
       emitParts(file.entities),
-      file.entities.flatMap(c => c.extendsFrom.map(e => (c.ref.emitCodeWithFullName(), e.emitCodeWithFullName())))
+      generateDependencies(file)
     ).right
     Log.printTrace(s"res:\n${r.toString}")
     r
@@ -27,6 +27,24 @@ case class EmittedParts(name: String, inPackage: String, code: String, inFile: S
 }
 
 object CodeEmitterHelper {
+  def generateDependencies(file: DiaFile): Seq[(String, String)] = {
+    file.entities.flatMap(c => generateExtendsFromField(c).map(e => (c.ref.emitCodeWithFullName(), e.emitCodeWithFullName())))
+  }
+
+  def generateFieldsExtendsFromAndMixins(c: DiaClass): (Option[DiaClassRefBase], Seq[DiaClassRefBase]) = c.extendsFrom match {
+    case Some(e) => (e.some, c.mixins)
+    case None => c.mixins.headOption match {
+      case Some(head) => (head.some, c.mixins.tail)
+      case None => (None, Seq())
+    }
+  }
+
+  val generateFieldsExtendsFromAndMixinsCached = Memo.mutableHashMapMemo[DiaClass, (Option[DiaClassRefBase], Seq[DiaClassRefBase])] {generateFieldsExtendsFromAndMixins}
+
+  def generateExtendsFromField(c: DiaClass): Option[DiaClassRefBase] = generateFieldsExtendsFromAndMixinsCached(c)._1
+
+  def generateMixinsField(c: DiaClass): Seq[DiaClassRefBase] = generateFieldsExtendsFromAndMixinsCached(c)._2
+
   def emitClass(c: DiaClass): EmittedParts = {
     val indent = "  "
     def genClass = (c.classType match {
@@ -35,10 +53,13 @@ object CodeEmitterHelper {
       case DiaClassType.Trait => "trait"
     }) + s" ${c.ref.name}"
 
-    def genExtends = (if (c.classType == DiaClassType.Enumeration) DiaClassRefBase.fromStringUnchecked("Enumeration") else c.extendsFrom).
+    def genExtends = (if (c.classType == DiaClassType.Enumeration) DiaClassRefBase.fromStringUnchecked("Enumeration") else generateExtendsFromField(c)).
       map(ef => s" extends ${ef.emitCode()}").getOrElse("")
 
-    def genMixins = if (c.mixins.isEmpty) "" else c.mixins.map(_.emitCode()).mkString(" with ", " with ", "")
+    def genMixins = {
+      val mixins = generateMixinsField(c)
+      if (mixins.isEmpty) "" else mixins.map(_.emitCode()).mkString(" with ", " with ", "")
+    }
 
     def genVisibility(v: DiaVisibility) = if (v == DiaVisibility.Public) "" else v.code + " "
 
@@ -82,8 +103,8 @@ object CodeEmitterHelper {
     def genImportsForClassRefOpt(cr: Option[DiaClassRefBase]): Seq[String] = cr.map(genImportsForClassRef).getOrElse(Seq())
 
     def genImportsForMixins: Seq[String] =
-      (if (c.extendsFrom.isEmpty) Seq() else Seq(c.extendsFrom.get.emitCodeWithFullName())) ++
-        c.mixins.map(_.emitCodeWithFullName())
+      (if (generateExtendsFromField(c).isEmpty) Seq() else Seq(generateExtendsFromField(c).get.emitCodeWithFullName())) ++
+        generateMixinsField(c).map(_.emitCodeWithFullName())
 
     def genImportsForAttributes: Seq[String] = c.attributes.flatMap {_.aType |> genImportsForClassRefOpt}
 

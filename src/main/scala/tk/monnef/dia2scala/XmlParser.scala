@@ -399,6 +399,7 @@ object XmlParserHelper {
   def parsedConnectionIdsToOneWayConnection(connectionsIds: (String, String), cType: DiaOneWayConnectionType): DiaOneWayConnection =
     DiaOneWayConnection(connectionsIds._1, connectionsIds._2, cType)
 
+  //  --------|>
   def parseGeneralization(n: Node): Option[DiaOneWayConnection] = {
     assertNodeObjectAndTypeAttribute(n, DiaObjectTypeGeneralization)
     parseConnections((n \ DiaNodeTypeConnections).head) |> {parsedConnectionIdsToOneWayConnection(_, DiaGeneralizationType)} |> Some.apply
@@ -417,6 +418,7 @@ object XmlParserHelper {
       } else c
     })
 
+  //  - - - - |>
   def parseRealizes(n: Node): Option[DiaOneWayConnection] = {
     assertNodeObjectAndTypeAttribute(n, DiaObjectTypeRealizes)
     val conn = parseConnections((n \ DiaNodeTypeConnections).head)
@@ -430,21 +432,20 @@ object XmlParserHelper {
     cType.map { ct => conn |> {parsedConnectionIdsToOneWayConnection(_, ct)}}
   }
 
+  // implements interface and mixin relationship
   def processRealizes(i: OneWayConnectionProcessorData): DiaFile =
     i.f.copy(entities = i.f.entities.map { c =>
       if (c.id == i.c.fromId) {
         val conn = i.c
         val toClassRef = i.f.idToClass(conn.toId).ref
         conn.cType match {
-          // TODO: not insert mixin to extends field, should be done later in come emitter
-          case DiaImplementsType | DiaMixinType =>
-            if (c.extendsFrom.isEmpty) c.copy(extendsFrom = toClassRef.some)
-            else c.copy(mixins = c.mixins :+ toClassRef)
+          case DiaImplementsType | DiaMixinType => c.copy(mixins = c.mixins :+ toClassRef)
           case t => throw new RuntimeException(s"Invalid connection type $t.")
         }
       } else c
     })
 
+  //  - - - - >
   def parseDependency(n: Node): Option[DiaOneWayConnection] = {
     assertNodeObjectAndTypeAttribute(n, DiaObjectTypeDependency)
     val conn = parseConnections((n \ DiaNodeTypeConnections).head, false)
