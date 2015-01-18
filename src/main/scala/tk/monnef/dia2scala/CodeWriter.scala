@@ -7,7 +7,7 @@ import scalaz._
 import Scalaz._
 import Utils._
 
-// TODO: fix objects not being grouped with its classes/traits
+// TODO: [low priority][improvement] fix objects not being grouped with its classes/traits
 
 object CodeWriter {
   def writeTextFile(data: EmittedCode, path: String, groupByDependency: Boolean): \/[String, CodeWriterSuccess.type] = {
@@ -55,17 +55,27 @@ object CodeWriter {
     val sortedNames: Seq[Seq[String]] = Utils.topologicalSortWithGrouping(data.dependencies)
     val nameToEmittedClass = data.parts.map(p => p.fullName -> p).toMap
     val sorted: Seq[Seq[EmittedParts]] = sortedNames.map {_.map {nameToEmittedClass(_)}}
+    val sortedAndGrouped: Seq[Seq[EmittedParts]] = breakGroupsContainingDifferentPackages(sorted)
 
     val notDependent: Map[String, Seq[EmittedParts]] = data.parts.filter { part =>
       val pName = part.fullName
       !data.dependencies.exists { case (a, b) => a == pName || b == pName}
     }.map { part => (part.inFile, Seq(part))}.toMap
 
-    sorted.map { case sortedPartsSeq =>
+    sortedAndGrouped.map { case sortedPartsSeq =>
       val masterPartFileName = sortedPartsSeq.head.inFile
       (masterPartFileName, sortedPartsSeq.map {_.copy(inFile = masterPartFileName)})
     }.toMap ++ notDependent
   }
+
+  def breakGroupsContainingDifferentPackages(d: Seq[Seq[EmittedParts]]): Seq[Seq[EmittedParts]] =
+    d.foldLeft(Seq(Seq[EmittedParts]())) { case (acc: Seq[Seq[EmittedParts]], group: Seq[EmittedParts]) =>
+      group.foldLeft(acc) { case (innerAcc: Seq[Seq[EmittedParts]], item: EmittedParts) =>
+        val lastGroup: Seq[EmittedParts] = innerAcc.last
+        if (lastGroup.isEmpty || lastGroup.head.inPackage == item.inPackage) innerAcc.init :+ (innerAcc.last :+ item)
+        else innerAcc :+ Seq(item)
+      }
+    }
 }
 
 case object CodeWriterSuccess
