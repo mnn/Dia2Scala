@@ -47,17 +47,10 @@ case class DiaFile(packages: Seq[DiaPackage], entities: Seq[DiaClass], idToClass
 
   def entityExists(ref: DiaUserClassRef): Boolean = findEntity(ref).nonEmpty
 
-  /*
-  def convertType(i: String): Option[\/[String, DiaUserClassRef]] = {
-    if (DiaClassRefBase.isScalaClass(i)) i.left.some
-    else {
-      findClass(i) match {
-        case Some(c) => c.ref.right.some
-        case None => None
-      }
-    }
+  def fullNameFromId(id: String): String = idToClass.get(id) match {
+    case Some(c) => c.ref.fullName
+    case None => s"<<no class found for id '$id'>>"
   }
-  */
 }
 
 object DiaFile {

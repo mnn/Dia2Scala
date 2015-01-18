@@ -32,11 +32,11 @@ object XmlParser {
         * - parse and process packages
         * - parse and semi-process classes:
         *     - name, attributes (not yet from association connections) and operators
-         *    - handle <<enumeration>> TODO
+         *    - handle <<enumeration>>
         *     - compute package
         * - parse and process generalization
-        * - parse and process <<implements>>, <<mixin>>, <<hasA>> ~ <<companionOf>>  TODO
-        * - parse and process associations TODO
+        * - parse and process <<implements>>, <<mixin>>, <<hasA>> ~ <<companionOf>>
+        * - parse and process associations
         */
         for {
           a <- processPackages(xml, DiaFile())
@@ -326,7 +326,7 @@ object XmlParserHelper {
 
     def handleGenericClassRef(r: DiaGenericClassRef): DiaGenericClassRef = r.copy(base = handleClassRef(r.base).asInstanceOf[DiaNonGenericClassRefBase], params = r.params.map(handleClassRef))
 
-    def handleFunctionClassRef(r: DiaFunctionClassRef): DiaFunctionClassRef = r // TODO: function same package handling
+    def handleFunctionClassRef(r: DiaFunctionClassRef): DiaFunctionClassRef = r.copy(inputs = r.inputs.map(handleClassRef), output = r.output |> handleClassRef)
 
     def handleClassRef[T >: DiaClassRefBase](r: T): T = {
       r match {
@@ -436,6 +436,7 @@ object XmlParserHelper {
         val conn = i.c
         val toClassRef = i.f.idToClass(conn.toId).ref
         conn.cType match {
+          // TODO: not insert mixin to extends field, should be done later in come emitter
           case DiaImplementsType | DiaMixinType =>
             if (c.extendsFrom.isEmpty) c.copy(extendsFrom = toClassRef.some)
             else c.copy(mixins = c.mixins :+ toClassRef)
@@ -538,9 +539,7 @@ object XmlParserHelper {
   }
 
   def processParsedAssociation(point: AssociationPointParsed, fromId: String, toId: String, f: DiaFile): DiaFile =
-  // TODO: other types than association - aggregation and composition
-    if (!point.showArrow) f // no arrow - no attribute created on this side
-    else {
+    if (point.showArrow || point.role.nonEmpty) {
       // TODO: [low priority] support for default values
       /*[Class From] ---------> [Class To]
                               ^------- current association */
@@ -561,13 +560,14 @@ object XmlParserHelper {
           (a(0), finalType.some)
       }
       val (name, isVal) = parseAttributeNameAndIsValFromName(f.idToClass(fromId).immutable.some, nameWithStereotype)
+      if (name.isEmpty) throw new RuntimeException(s"Association ${f.fullNameFromId(fromId)} -> ${f.fullNameFromId(toId)} has empty name.")
 
       f.copy(entities = f.entities.map { c =>
         if (c.id == fromId) {
           c.copy(attributes = c.attributes :+ DiaAttribute(name, aType, point.visibility, isVal, None))
         } else c
       })
-    }
+    } else f // nothing to be done on this side
 
   def processAssociation(n: Node, f: DiaFile): DiaFile = {
     val (startId, stopId) = parseConnections((n \ DiaNodeTypeConnections).head)

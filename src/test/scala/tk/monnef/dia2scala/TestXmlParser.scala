@@ -1,3 +1,4 @@
+
 package tk.monnef.dia2scala
 
 import java.io.File
@@ -256,5 +257,33 @@ class TestXmlParser extends FlatSpec {
 
       assert(src.attributes.toSet == expAttrs)
     }
+  }
+
+  "processParsedAssociation" should "crash on missing name" in {
+    val id = "id"
+    val cl = DiaClass(DiaUserClassRef("cl", ""), null, None, Seq(), id, Seq(), Seq(), DiaClassType.Class, true, false, false)
+    val f = DiaFile(Seq(), Seq(cl), Map(id -> cl))
+    val app = AssociationPointParsed("", "", DiaVisibility.Public, true)
+    intercept[RuntimeException] {
+      val r = XmlParserHelper.processParsedAssociation(app, id, id, f)
+      println(r)
+    }
+  }
+
+  "processClassRefInSamePackage" should "process a function referencing a class in same package" in {
+    val id = "id"
+    val pack = "pack"
+    val funcRef = DiaFunctionClassRef(Seq(DiaClassRefBase.createUncheckedUserClassRef(id)), DiaClassRefBase.createUncheckedUserClassRef(id))
+    val cl = DiaClass(DiaUserClassRef(id, pack), null, None, Seq(), id, Seq(DiaAttribute("attr", Some(funcRef), DiaVisibility.Private, false, None)), Seq(), DiaClassType.Class, true, false, false)
+    val f = DiaFile(Seq(DiaPackage(pack, null)), Seq(cl), Map(id -> cl))
+
+    val r = XmlParserHelper.processClassRefInSamePackage(f)
+
+    val expId = pack + "." + id
+    val expFuncRef = DiaFunctionClassRef(Seq(DiaClassRefBase.createUncheckedUserClassRef(expId)), DiaClassRefBase.createUncheckedUserClassRef(expId))
+    val rRef = r.entities.head.attributes.head.aType.get.asInstanceOf[DiaFunctionClassRef]
+
+    assert(rRef.output.asInstanceOf[DiaUserClassRef].fullName == expId)
+    assert(rRef == expFuncRef)
   }
 }
