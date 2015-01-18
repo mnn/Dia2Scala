@@ -51,6 +51,8 @@ case class DiaFile(packages: Seq[DiaPackage], entities: Seq[DiaClass], idToClass
     case Some(c) => c.ref.fullName
     case None => s"<<no class found for id '$id'>>"
   }
+
+  def isEnumeration(fullName: String): Boolean = findEntity(fullName) |> { d => d.exists(_.classType == DiaClassType.Enumeration)}
 }
 
 object DiaFile {
@@ -159,6 +161,8 @@ abstract class DiaClassRefBase {
   def emitCode(): String
 
   def emitCodeWithFullName(): String = emitCode()
+
+  def inUserPackage(p: String): Boolean
 }
 
 object DiaClassRefBase {
@@ -193,6 +197,8 @@ case class DiaScalaClassRef(name: String) extends DiaNonGenericClassRefBase {
   def fullName = name
 
   override def emitCode(): String = fullName
+
+  override def inUserPackage(p: String): Boolean = false
 }
 
 object DiaScalaClassRef {
@@ -206,20 +212,26 @@ object DiaScalaClassRef {
 
 case object DiaEmptyClassRef extends DiaClassRefBase {
   override def emitCode(): String = ""
+
+  override def inUserPackage(p: String): Boolean = false
 }
 
 case class DiaUserClassRef(name: String, inPackage: String) extends DiaNonGenericClassRefBase {
-  lazy val fullName = (if (inPackage.isEmpty) "" else inPackage + ".") + name
+  lazy val fullName = (if (inPackage.isEmpty) "" else inPackage + ".") + CodeEmitterHelper.sanitizeName(name)
 
-  override def emitCode(): String = name
+  override def emitCode(): String = CodeEmitterHelper.sanitizeName(name)
 
   override def emitCodeWithFullName(): String = fullName
+
+  override def inUserPackage(p: String): Boolean = p == inPackage
 }
 
 case class DiaGenericClassRef(base: DiaNonGenericClassRefBase, params: Seq[DiaClassRefBase]) extends DiaClassRefBase {
   // TODO: [low priority] support for "with" (easy workaround)
 
   override def emitCode(): String = base.emitCode() + "[" + params.map(_.emitCode()).mkString(", ") + "]"
+
+  override def inUserPackage(p: String): Boolean = base.inUserPackage(p)
 }
 
 object DiaGenericClassRef {
@@ -268,6 +280,8 @@ case class DiaFunctionClassRef(inputs: Seq[DiaClassRefBase], output: DiaClassRef
       else inputs.map(_.emitCode()).mkString("(", ", ", ")")
     inPart + " => " + output.emitCode()
   }
+
+  override def inUserPackage(p: String): Boolean = false
 }
 
 object DiaFunctionClassRef {
@@ -313,6 +327,8 @@ object DiaFunctionClassRef {
 
 case class DiaTupleClassRef(params: Seq[DiaClassRefBase]) extends DiaClassRefBase {
   override def emitCode(): String = params.map(_.emitCode()).mkString("(", ", ", ")")
+
+  override def inUserPackage(p: String): Boolean = false
 }
 
 object DiaTupleClassRef {

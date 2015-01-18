@@ -5,6 +5,8 @@ import scalaz._
 import Scalaz._
 import Utils._
 
+// TODO: import table, e.g. PriorityQueue -> add import "scala.collection.mutable.PriorityQueue"
+// TODO: override modifiers?
 object CodeEmitter {
 
   import CodeEmitterHelper._
@@ -12,7 +14,7 @@ object CodeEmitter {
   def emit(file: DiaFile): \/[String, EmittedCode] = {
     Log.printDebug(s"CodeEmitter.emit:")
     val r = EmittedCode(
-      emitParts(file.entities),
+      emitParts(file),
       generateDependencies(file)
     ).right
     Log.printTrace(s"res:\n${r.toString}")
@@ -45,13 +47,17 @@ object CodeEmitterHelper {
 
   def generateMixinsField(c: DiaClass): Seq[DiaClassRefBase] = generateFieldsExtendsFromAndMixinsCached(c)._2
 
-  def emitClass(c: DiaClass): EmittedParts = {
+  val ScalaKeywords = "abstract,case,catch,class,def,do,else,extends,false,final,finally,for,forSome,if,implicit,import,lazy,match,new,null,object,override,package,private,protected,return,sealed,super,this,throw,trait,try,true,type,val,var,while,with,yield".split(",").toSet
+
+  def sanitizeName(n: String): String = if (ScalaKeywords.contains(n)) s"`$n`" else n
+
+  def emitClass(c: DiaClass, f: DiaFile): EmittedParts = {
     val indent = "  "
     def genClass = (c.classType match {
       case DiaClassType.Class => "class"
       case DiaClassType.Object | DiaClassType.Enumeration => "object"
       case DiaClassType.Trait => "trait"
-    }) + s" ${c.ref.name}"
+    }) + s" ${sanitizeName(c.ref.name)}"
 
     def genExtends = (if (c.classType == DiaClassType.Enumeration) DiaClassRefBase.fromStringUnchecked("Enumeration") else generateExtendsFromField(c)).
       map(ef => s" extends ${ef.emitCode()}").getOrElse("")
@@ -71,19 +77,20 @@ object CodeEmitterHelper {
       indent +
         genVisibility(a.visibility) +
         (if (a.isVal) "val " else "var ") +
-        a.name +
+        sanitizeName(a.name) +
         genOptTypePart(a.aType) +
-        " = _" +
+        " = " + (if (a.isVal) "???" else "_") +
         ""
     }
 
-    def genParameter(p: DiaOperationParameter): String = p.name + genOptTypePart(p.pType)
+    def genParameter(p: DiaOperationParameter): String = sanitizeName(p.name) + genOptTypePart(p.pType)
 
     def genOperations: Seq[String] = c.operations.map { o: DiaOperationDescriptor =>
+      val name = sanitizeName(o.name)
       indent +
         genVisibility(o.visibility) +
         "def " +
-        o.name +
+        name + (if (name.last.isLetterOrDigit) "" else " ") +
         "(" +
         o.parameters.map(genParameter).mkString(", ") +
         ")" +
@@ -92,11 +99,22 @@ object CodeEmitterHelper {
     }
 
     def genImportsForClassRef(cr: DiaClassRefBase): Seq[String] = {
-      cr match {
-        case x: DiaUserClassRef => Seq(x.fullName)
-        case x: DiaGenericClassRef => genImportsForClassRef(x.base) ++ x.params.flatMap(genImportsForClassRef)
-        case x: DiaTupleClassRef => x.params.flatMap(genImportsForClassRef)
-        case _ => Seq()
+      val isEnumeration = cr match {
+        case x: DiaUserClassRef => f.isEnumeration(x.fullName)
+        case _ => false
+      }
+
+      if (cr.emitCodeWithFullName() == c.ref.emitCodeWithFullName() ||
+        (cr.inUserPackage(c.ref.inPackage) && !isEnumeration)) {
+        Seq()
+      } else {
+        cr match {
+          case x: DiaUserClassRef =>
+            Seq(if (isEnumeration) s"${x.fullName}._" else x.fullName)
+          case x: DiaGenericClassRef => genImportsForClassRef(x.base) ++ x.params.flatMap(genImportsForClassRef)
+          case x: DiaTupleClassRef => x.params.flatMap(genImportsForClassRef)
+          case _ => Seq()
+        }
       }
     }
 
@@ -163,7 +181,7 @@ object CodeEmitterHelper {
     )
   }
 
-  def emitParts(cs: Seq[DiaClass]): Seq[EmittedParts] = cs map emitClass
+  def emitParts(f: DiaFile): Seq[EmittedParts] = f.entities.map(emitClass(_, f))
 }
 
 class CodeBuilder {
