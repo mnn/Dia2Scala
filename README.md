@@ -37,6 +37,12 @@ Example diagrams
 **TODO**: pictures of diagrams with either short text description or corresponding code
 
 
+Not supported
+-------------
+*  template classes (generic user classes)
+*  override modifier
+
+
 License
 -------
 GNU General Public License 3 (GPL3)  
