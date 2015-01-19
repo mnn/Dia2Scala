@@ -436,11 +436,15 @@ object DiaEntity {
   def parseClassNameWithPackage(i: String): (String, String) = i.split("\\.") |> { a => (a.last, a.init.mkString("."))}
 }
 
-case class DiaOperationDescriptor(name: String, visibility: DiaVisibility, parameters: Seq[DiaOperationParameter], oType: Option[DiaClassRefBase])
+case class DiaOperationDescriptor(name: String, visibility: DiaVisibility, parameters: Seq[DiaOperationParameter], oType: Option[DiaClassRefBase], isOverriding: Boolean) {
+  def hasSameParameterTypesAs(other: DiaOperationDescriptor): Boolean =
+    parameters.size == other.parameters.size &&
+      parameters.zip(other.parameters).forall { case (a, b) => a.pType == b.pType}
+}
 
 case class DiaOperationParameter(name: String, pType: Option[DiaClassRefBase])
 
-case class DiaAttribute(name: String, aType: Option[DiaClassRefBase], visibility: DiaVisibility, isVal: Boolean, defaultValue: Option[String], isLazy: Boolean, isOverriding:Boolean)
+case class DiaAttribute(name: String, aType: Option[DiaClassRefBase], visibility: DiaVisibility, isVal: Boolean, defaultValue: Option[String], isLazy: Boolean, isOverriding: Boolean)
 
 case class DiaGeometry(x: Double, y: Double, width: Double, height: Double) {
   def contains(other: DiaGeometry): Boolean = contains(other.x, other.y, other.width, other.height)

@@ -243,7 +243,8 @@ object XmlParserHelper {
       extractAttributeName(n),
       extractVisibility(n),
       (extractDiaAttributeByName(n, DiaAttributeParameters) \ DiaNodeTypeComposite).map(processParameter),
-      extractDiaAttributeStringAndStrip(n, DiaAttributeType) |> fromStringUnchecked
+      extractDiaAttributeStringAndStrip(n, DiaAttributeType) |> fromStringUnchecked,
+      false
     )
   }
 
@@ -606,10 +607,24 @@ object XmlParserHelper {
     def attributeWithSameNameExistsInHierarchy(currEntity: DiaEntity, name: String): Boolean =
       walkEntity(true, currEntity, Set(), name, (ce: DiaEntity, d: String) => ce.attributes.exists(a => a.name == name))
 
+    def operationWithSameNameAndParametersExistsInHierarchy(currEntity: DiaEntity, op: DiaOperationDescriptor): Boolean = {
+      val func = (ce: DiaEntity, d: DiaOperationDescriptor) => ce.operations.exists(o => o.name == d.name && o.oType == d.oType && o.hasSameParameterTypesAs(d))
+      walkEntity(true, currEntity, Set(), op, func)
+    }
+
     f.copy(entities = f.entities.map { case entity =>
       entity.copy(attributes = entity.attributes.map { case attr =>
-        if (attributeWithSameNameExistsInHierarchy(entity, attr.name)) attr.copy(isOverriding = true)
+        if (attributeWithSameNameExistsInHierarchy(entity, attr.name) ||
+          operationWithSameNameAndParametersExistsInHierarchy(entity, DiaOperationDescriptor(attr.name, null, Seq(), attr.aType, false))) {
+          attr.copy(isOverriding = true)
+        }
         else attr
+      }, operations = entity.operations.map { case op =>
+        if (operationWithSameNameAndParametersExistsInHierarchy(entity, op) ||
+          (op.parameters.isEmpty && attributeWithSameNameExistsInHierarchy(entity, op.name))) {
+          op.copy(isOverriding = true)
+        }
+        else op
       })
     })
   }

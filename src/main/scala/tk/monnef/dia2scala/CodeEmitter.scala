@@ -90,6 +90,7 @@ object CodeEmitterHelper {
     def genOperations: Seq[String] = c.operations.map { o: DiaOperationDescriptor =>
       val name = sanitizeName(o.name)
       indent +
+        (if (o.isOverriding) "override " else "") +
         genVisibility(o.visibility) +
         "def " +
         name + (if (name.last.isLetterOrDigit) "" else " ") +
