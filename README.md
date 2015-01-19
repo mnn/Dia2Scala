@@ -52,7 +52,6 @@ Not implemented yet
 Known issues
 ------------
 *  missing override modifier
-*  classes with companion objects are being rewritten (missing in generated source files)
 
 
 Not supported

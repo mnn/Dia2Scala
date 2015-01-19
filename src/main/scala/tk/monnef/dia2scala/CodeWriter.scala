@@ -53,14 +53,14 @@ object CodeWriter {
 
   def groupAndSortByInheritance(data: EmittedCode): Map[String, Seq[EmittedParts]] = {
     val sortedNames: Seq[Seq[String]] = Utils.topologicalSortWithGrouping(data.dependencies)
-    val nameToEmittedClass = data.parts.map(p => p.fullName -> p).toMap
-    val sorted: Seq[Seq[EmittedParts]] = sortedNames.map {_.map {nameToEmittedClass(_)}}
+    val nameToEmittedClass = data.parts.groupBy(_.fullName)
+    val sorted: Seq[Seq[EmittedParts]] = sortedNames.map {_.flatMap {nameToEmittedClass(_)}}
     val sortedAndGrouped: Seq[Seq[EmittedParts]] = breakGroupsContainingDifferentPackages(sorted)
 
     val notDependent: Map[String, Seq[EmittedParts]] = data.parts.filter { part =>
       val pName = part.fullName
       !data.dependencies.exists { case (a, b) => a == pName || b == pName}
-    }.map { part => (part.inFile, Seq(part))}.toMap
+    }.groupBy(_.inFile)
 
     sortedAndGrouped.map { case sortedPartsSeq =>
       val masterPartFileName = sortedPartsSeq.head.inFile
