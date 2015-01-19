@@ -33,7 +33,7 @@ object CodeEmitterHelper {
     file.entities.flatMap(c => generateExtendsFromField(c).map(e => (c.ref.emitCodeWithFullName(), e.emitCodeWithFullName())))
   }
 
-  def generateFieldsExtendsFromAndMixins(c: DiaClass): (Option[DiaClassRefBase], Seq[DiaClassRefBase]) = c.extendsFrom match {
+  def generateFieldsExtendsFromAndMixins(c: DiaEntity): (Option[DiaClassRefBase], Seq[DiaClassRefBase]) = c.extendsFrom match {
     case Some(e) => (e.some, c.mixins)
     case None => c.mixins.headOption match {
       case Some(head) => (head.some, c.mixins.tail)
@@ -41,25 +41,25 @@ object CodeEmitterHelper {
     }
   }
 
-  val generateFieldsExtendsFromAndMixinsCached = Memo.mutableHashMapMemo[DiaClass, (Option[DiaClassRefBase], Seq[DiaClassRefBase])] {generateFieldsExtendsFromAndMixins}
+  val generateFieldsExtendsFromAndMixinsCached = Memo.mutableHashMapMemo[DiaEntity, (Option[DiaClassRefBase], Seq[DiaClassRefBase])] {generateFieldsExtendsFromAndMixins}
 
-  def generateExtendsFromField(c: DiaClass): Option[DiaClassRefBase] = generateFieldsExtendsFromAndMixinsCached(c)._1
+  def generateExtendsFromField(c: DiaEntity): Option[DiaClassRefBase] = generateFieldsExtendsFromAndMixinsCached(c)._1
 
-  def generateMixinsField(c: DiaClass): Seq[DiaClassRefBase] = generateFieldsExtendsFromAndMixinsCached(c)._2
+  def generateMixinsField(c: DiaEntity): Seq[DiaClassRefBase] = generateFieldsExtendsFromAndMixinsCached(c)._2
 
   val ScalaKeywords = "abstract,case,catch,class,def,do,else,extends,false,final,finally,for,forSome,if,implicit,import,lazy,match,new,null,object,override,package,private,protected,return,sealed,super,this,throw,trait,try,true,type,val,var,while,with,yield".split(",").toSet
 
   def sanitizeName(n: String): String = if (ScalaKeywords.contains(n)) s"`$n`" else n
 
-  def emitClass(c: DiaClass, f: DiaFile): EmittedParts = {
+  def emitClass(c: DiaEntity, f: DiaFile): EmittedParts = {
     val indent = "  "
     def genClass = (c.classType match {
-      case DiaClassType.Class => "class"
-      case DiaClassType.Object | DiaClassType.Enumeration => "object"
-      case DiaClassType.Trait => "trait"
+      case DiaEntityType.Class => "class"
+      case DiaEntityType.Object | DiaEntityType.Enumeration => "object"
+      case DiaEntityType.Trait => "trait"
     }) + s" ${sanitizeName(c.ref.name)}"
 
-    def genExtends = (if (c.classType == DiaClassType.Enumeration) DiaClassRefBase.fromStringUnchecked("Enumeration") else generateExtendsFromField(c)).
+    def genExtends = (if (c.classType == DiaEntityType.Enumeration) DiaClassRefBase.fromStringUnchecked("Enumeration") else generateExtendsFromField(c)).
       map(ef => s" extends ${ef.emitCode()}").getOrElse("")
 
     def genMixins = {
@@ -147,7 +147,7 @@ object CodeEmitterHelper {
     }
 
     def emitClassBody(cb: CodeBuilder): CodeBuilder = {
-      cb |> { cb: CodeBuilder => if (c.classType == DiaClassType.Enumeration) {
+      cb |> { cb: CodeBuilder => if (c.classType == DiaEntityType.Enumeration) {
         cb.
           addLine(indent + s"type ${c.ref.emitCode()} = Value").
           addLine(indent + "val " + c.attributes.map(_.name).mkString(", ") + " = Value")

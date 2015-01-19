@@ -6,7 +6,7 @@ import java.util.zip.GZIPInputStream
 
 import tk.monnef.dia2scala.DiaClassRefBase
 import tk.monnef.dia2scala.DiaClassRefBase.fromStringUnchecked
-import tk.monnef.dia2scala.DiaClassType._
+import tk.monnef.dia2scala.DiaEntityType._
 import tk.monnef.dia2scala.DiaVisibility.DiaVisibility
 import tk.monnef.dia2scala.Utils._
 
@@ -255,7 +255,7 @@ object XmlParserHelper {
   val ClassStereoImmutable = "immutable"
   val ValidClassStereos = Seq(ClassStereoInterface, ClassStereoTrait, ClassStereoEnum, ClassStereoEnumeration, ClassStereoSingleton, ClassStereoObject, ClassStereoMutable, ClassStereoImmutable)
 
-  def processClass(n: Node): \/[String, DiaClass] = {
+  def processClass(n: Node): \/[String, DiaEntity] = {
     assertNodeObjectAndTypeAttribute(n, DiaObjectTypeClass)
     wrapErrorToJunction {
       val stereotypes = extractDiaAttributeStringAndStrip(n, DiaAttributeStereotype).split("[,;] *").toSeq
@@ -283,7 +283,7 @@ object XmlParserHelper {
       val attributes = attributesRaw.map { a => a.copy(isVal = if (isMutable) false else if (isImmutable) true else a.isVal)}
       val operations = (extractDiaAttributesMatchingName(n, DiaAttributeOperations) \ DiaNodeTypeComposite).map(processOperation)
 
-      DiaClass(
+      DiaEntity(
         classRef,
         extractGeometry(n),
         None,
@@ -299,7 +299,7 @@ object XmlParserHelper {
     }
   }
 
-  def getPackageForClass(f: DiaFile, c: DiaClass): Option[DiaPackage] = {
+  def getPackageForClass(f: DiaFile, c: DiaEntity): Option[DiaPackage] = {
     val inPackages = f.packages.filter(p => p.geometry.contains(c.geometry))
     // TODO: [low priority] support for graphically nested packages
     // sort by "contains" and return either most inner or path of packages
@@ -350,14 +350,14 @@ object XmlParserHelper {
   })
 
   def markClassesOfCompanionObjects(f: DiaFile): DiaFile = {
-    val toMark = f.entities.filter(c => c.classType == DiaClassType.Object).map(_.ref)
+    val toMark = f.entities.filter(c => c.classType == DiaEntityType.Object).map(_.ref)
     f.copy(entities = f.entities.map { case c =>
-      if (c.classType == DiaClassType.Class && toMark.contains(c.ref)) c.copy(hasCompanionObject = true)
+      if (c.classType == DiaEntityType.Class && toMark.contains(c.ref)) c.copy(hasCompanionObject = true)
       else c
     })
   }
 
-  def formatEntity(e: DiaClass): String = {
+  def formatEntity(e: DiaEntity): String = {
     e.ref.fullName + s" [${e.id}] -> " + e.ref + " (" + e.classType + ")\n" +
       "extends from " + e.extendsFrom.mkString(", ") + s", mixins:  ${e.mixins.mkString(", ")}\n" +
       e.geometry + "\n" +
@@ -460,7 +460,7 @@ object XmlParserHelper {
       if (c.id == i.c.fromId) {
         val conn = i.c
         conn.cType match {
-          case DiaCompanionOfType => c.copy(classType = DiaClassType.Object)
+          case DiaCompanionOfType => c.copy(classType = DiaEntityType.Object)
           case t => throw new RuntimeException(s"Invalid connection type $t.")
         }
       } else if (c.id == i.c.toId) {
@@ -577,7 +577,7 @@ object XmlParserHelper {
   }
 
   def processImportTable(e: Elem, f: DiaFile): \/[String, DiaFile] = wrapErrorToJunction {
-    def getPackage(name: String): Option[String] = f.importTable.fullNameForClass(name).map(DiaClass.parseClassNameWithPackage(_)._2)
+    def getPackage(name: String): Option[String] = f.importTable.fullNameForClass(name).map(DiaEntity.parseClassNameWithPackage(_)._2)
 
     def func(ref: DiaUserClassRef): DiaUserClassRef =
       if (ref.inPackage.nonEmpty) ref

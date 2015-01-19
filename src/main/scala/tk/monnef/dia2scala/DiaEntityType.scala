@@ -1,6 +1,6 @@
 package tk.monnef.dia2scala
 
-object DiaClassType extends Enumeration {
-  type DiaClassType = Value
+object DiaEntityType extends Enumeration {
+  type DiaEntityType = Value
   val Class, Enumeration, Trait, Object = Value
 }

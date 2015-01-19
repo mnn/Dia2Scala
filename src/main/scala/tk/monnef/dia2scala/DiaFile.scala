@@ -1,6 +1,6 @@
 package tk.monnef.dia2scala
 
-import tk.monnef.dia2scala.DiaClassType.DiaClassType
+import tk.monnef.dia2scala.DiaEntityType.DiaEntityType
 import tk.monnef.dia2scala.DiaVisibility.DiaVisibility
 
 import scala.annotation.tailrec
@@ -10,7 +10,7 @@ import scalaz.syntax.std.all._
 import scalaz.Scalaz.ToIdOps
 import scalaz.{\/-, -\/, \/}
 
-case class DiaFile(packages: Seq[DiaPackage], entities: Seq[DiaClass], idToClass: Map[String, DiaClass], importTable: ImportTable) {
+case class DiaFile(packages: Seq[DiaPackage], entities: Seq[DiaEntity], idToClass: Map[String, DiaEntity], importTable: ImportTable) {
 
   import DiaFile._
 
@@ -21,28 +21,28 @@ case class DiaFile(packages: Seq[DiaPackage], entities: Seq[DiaClass], idToClass
     // TODO: uncomment after validation is done
   }
 
-  def findEntityInAnyPackage(name: String): Seq[DiaClass] = {
+  def findEntityInAnyPackage(name: String): Seq[DiaEntity] = {
     entities.filter(c => c.ref.name == name)
   }
 
-  def findEntity(fullName: String): Seq[DiaClass] = {
+  def findEntity(fullName: String): Seq[DiaEntity] = {
     findEntity(DiaClassRefBase.createUncheckedUserClassRef(fullName))
   }
 
-  def findEntity(inPackage: String, name: String): Seq[DiaClass] = {
+  def findEntity(inPackage: String, name: String): Seq[DiaEntity] = {
     findEntity(DiaUserClassRef(name, inPackage))
   }
 
-  def findEntity(ref: DiaUserClassRef): Seq[DiaClass] = {
+  def findEntity(ref: DiaUserClassRef): Seq[DiaEntity] = {
     entities.filter(c => c.ref == ref)
   }
 
-  def findObject(fullName: String): Seq[DiaClass] = {
+  def findObject(fullName: String): Seq[DiaEntity] = {
     findObject(DiaClassRefBase.createUncheckedUserClassRef(fullName))
   }
 
-  def findObject(ref: DiaUserClassRef): Seq[DiaClass] = {
-    findEntity(ref).filter(_.classType == DiaClassType.Object)
+  def findObject(ref: DiaUserClassRef): Seq[DiaEntity] = {
+    findEntity(ref).filter(_.classType == DiaEntityType.Object)
   }
 
   def entityExists(ref: DiaUserClassRef): Boolean = findEntity(ref).nonEmpty
@@ -52,7 +52,7 @@ case class DiaFile(packages: Seq[DiaPackage], entities: Seq[DiaClass], idToClass
     case None => s"<<no class found for id '$id'>>"
   }
 
-  def isEnumeration(fullName: String): Boolean = findEntity(fullName) |> { d => d.exists(_.classType == DiaClassType.Enumeration)}
+  def isEnumeration(fullName: String): Boolean = findEntity(fullName) |> { d => d.exists(_.classType == DiaEntityType.Enumeration)}
 }
 
 object DiaFile {
@@ -168,7 +168,7 @@ abstract class DiaClassRefBase {
 }
 
 object DiaClassRefBase {
-  def createUncheckedUserClassRef(i: String): DiaUserClassRef = DiaClass.parseClassNameWithPackage(i) |> { case (name, pck) => DiaUserClassRef(name, pck)}
+  def createUncheckedUserClassRef(i: String): DiaUserClassRef = DiaEntity.parseClassNameWithPackage(i) |> { case (name, pck) => DiaUserClassRef(name, pck)}
 
   def isScalaClass(n: String): Boolean = DiaScalaClassRef.ScalaClasses.contains(n)
 
@@ -380,7 +380,7 @@ object DiaTupleClassRef {
     }
 }
 
-case class DiaClass(ref: DiaUserClassRef, geometry: DiaGeometry, extendsFrom: Option[DiaClassRefBase], mixins: Seq[DiaClassRefBase], id: String, attributes: Seq[DiaAttribute], operations: Seq[DiaOperationDescriptor], classType: DiaClassType, mutable: Boolean, immutable: Boolean, hasCompanionObject: Boolean) extends Checkable {
+case class DiaEntity(ref: DiaUserClassRef, geometry: DiaGeometry, extendsFrom: Option[DiaClassRefBase], mixins: Seq[DiaClassRefBase], id: String, attributes: Seq[DiaAttribute], operations: Seq[DiaOperationDescriptor], classType: DiaEntityType, mutable: Boolean, immutable: Boolean, hasCompanionObject: Boolean) extends Checkable {
   override def validationErrors(): Seq[String] = {
     ({
       if (ref.name.trim.isEmpty) Seq(Seq(s"Class with empty name ($id)."))
@@ -390,7 +390,7 @@ case class DiaClass(ref: DiaUserClassRef, geometry: DiaGeometry, extendsFrom: Op
   }
 }
 
-object DiaClass {
+object DiaEntity {
   /**
    * @param i Full name in dot notation.
    * @return (name, package)
