@@ -21,7 +21,7 @@ class TestXmlParser extends FlatSpec {
   }
 
   def parse(name: String, packed: Boolean): \/[String, DiaFile] =
-    XmlParser.parseFile(new File(TestHelper.genDiagramPath(name)), packed)
+    XmlParser.parseFile(new File(TestHelper.genDiagramPath(name)), packed, ImportTable.default)
 
   def parsePacked(name: String): \/[String, DiaFile] = parse(name, packed = true)
 
@@ -175,7 +175,7 @@ class TestXmlParser extends FlatSpec {
     val classIdTo = "idTo"
     val classFrom = DiaClass(createUncheckedUserClassRef("fromName"), DiaGeometry(-1, -2, 1, 1), None, Seq(), classIdFrom, Seq(), Seq(), DiaClassType.Class, false, false, false)
     val classTo = DiaClass(createUncheckedUserClassRef("toName"), DiaGeometry(2, 3, 5, 5), None, Seq(), classIdTo, Seq(), Seq(), DiaClassType.Class, false, false, false)
-    val f = DiaFile(Seq(), Seq(classFrom, classTo), Map(classIdFrom -> classFrom, classIdTo -> classTo))
+    val f = DiaFile(Seq(), Seq(classFrom, classTo), Map(classIdFrom -> classFrom, classIdTo -> classTo), ImportTable.empty)
     val geneConn = DiaOneWayConnection(classIdFrom, classIdTo, DiaGeneralizationType)
     val res = XmlParserHelper.processGeneralization(OneWayConnectionProcessorData(f, geneConn, Map(classIdFrom -> geneConn), Map(classIdTo -> geneConn)))
     assert(res.entities.head.extendsFrom.get == classTo.ref)
@@ -262,7 +262,7 @@ class TestXmlParser extends FlatSpec {
   "processParsedAssociation" should "crash on missing name" in {
     val id = "id"
     val cl = DiaClass(DiaUserClassRef("cl", ""), null, None, Seq(), id, Seq(), Seq(), DiaClassType.Class, true, false, false)
-    val f = DiaFile(Seq(), Seq(cl), Map(id -> cl))
+    val f = DiaFile(Seq(), Seq(cl), Map(id -> cl), ImportTable.empty)
     val app = AssociationPointParsed("", "", DiaVisibility.Public, true)
     intercept[RuntimeException] {
       val r = XmlParserHelper.processParsedAssociation(app, id, id, f)
@@ -275,7 +275,7 @@ class TestXmlParser extends FlatSpec {
     val pack = "pack"
     val funcRef = DiaFunctionClassRef(Seq(DiaClassRefBase.createUncheckedUserClassRef(id)), DiaClassRefBase.createUncheckedUserClassRef(id))
     val cl = DiaClass(DiaUserClassRef(id, pack), null, None, Seq(), id, Seq(DiaAttribute("attr", Some(funcRef), DiaVisibility.Private, false, None)), Seq(), DiaClassType.Class, true, false, false)
-    val f = DiaFile(Seq(DiaPackage(pack, null)), Seq(cl), Map(id -> cl))
+    val f = DiaFile(Seq(DiaPackage(pack, null)), Seq(cl), Map(id -> cl), ImportTable.empty)
 
     val r = XmlParserHelper.processClassRefInSamePackage(f)
 

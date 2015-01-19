@@ -10,7 +10,7 @@ import scalaz.syntax.std.all._
 import scalaz.Scalaz.ToIdOps
 import scalaz.{\/-, -\/, \/}
 
-case class DiaFile(packages: Seq[DiaPackage], entities: Seq[DiaClass], idToClass: Map[String, DiaClass]) {
+case class DiaFile(packages: Seq[DiaPackage], entities: Seq[DiaClass], idToClass: Map[String, DiaClass], importTable: ImportTable) {
 
   import DiaFile._
 
@@ -56,7 +56,7 @@ case class DiaFile(packages: Seq[DiaPackage], entities: Seq[DiaClass], idToClass
 }
 
 object DiaFile {
-  def apply(): DiaFile = DiaFile(Seq(), Seq(), Map())
+  def apply(): DiaFile = DiaFile(Seq(), Seq(), Map(), ImportTable.default)
 
   def generateSeqIfTrue[T](cond: Boolean, msg: T): Seq[T] = if (cond) Seq(msg) else Seq()
 
@@ -163,6 +163,8 @@ abstract class DiaClassRefBase {
   def emitCodeWithFullName(): String = emitCode()
 
   def inUserPackage(p: String): Boolean
+
+  def mapRecursivelyUserClassReferences(f: DiaUserClassRef => DiaUserClassRef): DiaClassRefBase = this
 }
 
 object DiaClassRefBase {
@@ -202,7 +204,7 @@ case class DiaScalaClassRef(name: String) extends DiaNonGenericClassRefBase {
 }
 
 object DiaScalaClassRef {
-  final val ScalaClasses = Seq("Seq", "Int", "String", "Double", "Float", "Map", "List", "Set", "Option", "Either", "Char", "Boolean", "Byte", "Short", "Long", "Any", "AnyVal", "AnyRef", "Unit", "Array", "Queue", "PriorityQueue")
+  final val ScalaClasses = Seq("Seq", "Int", "String", "Double", "Float", "Map", "List", "Set", "Option", "Either", "Char", "Boolean", "Byte", "Short", "Long", "Any", "AnyVal", "AnyRef", "Unit", "Array")
 
   def fromString(name: String): DiaScalaClassRef = {
     if (!ScalaClasses.contains(name)) throw new RuntimeException(s"Class name '$name' is not a Scala type.")
@@ -224,6 +226,8 @@ case class DiaUserClassRef(name: String, inPackage: String) extends DiaNonGeneri
   override def emitCodeWithFullName(): String = fullName
 
   override def inUserPackage(p: String): Boolean = p == inPackage
+
+  override def mapRecursivelyUserClassReferences(f: DiaUserClassRef => DiaUserClassRef): DiaClassRefBase = f(this)
 }
 
 case class DiaGenericClassRef(base: DiaNonGenericClassRefBase, params: Seq[DiaClassRefBase]) extends DiaClassRefBase {
@@ -232,6 +236,9 @@ case class DiaGenericClassRef(base: DiaNonGenericClassRefBase, params: Seq[DiaCl
   override def emitCode(): String = base.emitCode() + "[" + params.map(_.emitCode()).mkString(", ") + "]"
 
   override def inUserPackage(p: String): Boolean = base.inUserPackage(p)
+
+  override def mapRecursivelyUserClassReferences(f: DiaUserClassRef => DiaUserClassRef): DiaClassRefBase =
+    copy(base = base.mapRecursivelyUserClassReferences(f).asInstanceOf[DiaNonGenericClassRefBase], params = params.map(_.mapRecursivelyUserClassReferences(f)))
 }
 
 object DiaGenericClassRef {
@@ -282,6 +289,8 @@ case class DiaFunctionClassRef(inputs: Seq[DiaClassRefBase], output: DiaClassRef
   }
 
   override def inUserPackage(p: String): Boolean = false
+
+  override def mapRecursivelyUserClassReferences(f: DiaUserClassRef => DiaUserClassRef): DiaClassRefBase = copy(inputs = inputs.map(_.mapRecursivelyUserClassReferences(f)), output = output.mapRecursivelyUserClassReferences(f))
 }
 
 object DiaFunctionClassRef {
@@ -329,6 +338,8 @@ case class DiaTupleClassRef(params: Seq[DiaClassRefBase]) extends DiaClassRefBas
   override def emitCode(): String = params.map(_.emitCode()).mkString("(", ", ", ")")
 
   override def inUserPackage(p: String): Boolean = false
+
+  override def mapRecursivelyUserClassReferences(f: DiaUserClassRef => DiaUserClassRef): DiaClassRefBase = copy(params = params.map(_.mapRecursivelyUserClassReferences(f)))
 }
 
 object DiaTupleClassRef {
@@ -380,6 +391,10 @@ case class DiaClass(ref: DiaUserClassRef, geometry: DiaGeometry, extendsFrom: Op
 }
 
 object DiaClass {
+  /**
+   * @param i Full name in dot notation.
+   * @return (name, package)
+   */
   def parseClassNameWithPackage(i: String): (String, String) = i.split("\\.") |> { a => (a.last, a.init.mkString("."))}
 }
 

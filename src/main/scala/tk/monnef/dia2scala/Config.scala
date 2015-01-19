@@ -4,7 +4,7 @@ import java.io.File
 
 import tk.monnef.dia2scala.BuildInfoWrapper._
 
-case class Config(file: File = null, unpack: Boolean = true, verbosity: VerbosityLevel = NotVerbose, outputPath: String = "out", groupByDependency:Boolean=false)
+case class Config(file: File = null, unpack: Boolean = true, verbosity: VerbosityLevel = NotVerbose, outputPath: String = "out", groupByDependency: Boolean = false, useDefaultImportTable: Boolean = true)
 
 object CommandLineParser {
   def apply(args: Array[String]): Option[Config] = {
@@ -29,9 +29,12 @@ object CommandLineParser {
       opt[String]('o', "outputpath") valueName "<path>" action { (x, c) =>
         c.copy(outputPath = x)
       } text "output directory"
-      opt[Unit]('d',"groupbydependency") action {(_,c)=>
+      opt[Unit]('d', "groupbydependency") action { (_, c) =>
         c.copy(groupByDependency = true)
       } text "tries group related classes to one source file"
+      opt[Unit]("suppress-default-import-table") action { (_, c) =>
+        c.copy(useDefaultImportTable = false)
+      } text "forbids usage of default import table containing several Scala classes"
     }
     parser.parse(args, Config())
   }

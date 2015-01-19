@@ -20,12 +20,13 @@ object XmlParser {
   import scalaz.Scalaz._
   import scalaz._
 
-  def parseFile(file: File, isPacked: Boolean): \/[String, DiaFile] = {
+  def parseFile(file: File, isPacked: Boolean, importTable: ImportTable): \/[String, DiaFile] = {
     Log.printDebug(s"XmlParser.parseFile: '${file.getAbsoluteFile}'")
     getXmlStream(file, isPacked) match {
       case scala.util.Failure(t) => s"Unable to create stream reader: ${t.getMessage}".left
       case scala.util.Success(xmlStream) =>
         val xml = scala.xml.XML.load(xmlStream)
+        val dFile = DiaFile().copy(importTable = importTable)
         /*
         * Process list:
         * - xml
@@ -39,13 +40,14 @@ object XmlParser {
         * - parse and process associations
         */
         for {
-          a <- processPackages(xml, DiaFile())
+          a <- processPackages(xml, dFile)
           b <- semiProcessClasses(xml, a)
           c <- processOneWayConnections(xml, b)
           d <- processAssociations(xml, c)
           e <- processClassRefInSamePackageWrapped(xml, d)
-          f <- processErrors(e)
-        } yield f
+          f <- processImportTable(xml, e)
+          g <- processErrors(f)
+        } yield g
     }
   }
 }
@@ -295,14 +297,16 @@ object XmlParserHelper {
 
   def getPackageForClass(f: DiaFile, c: DiaClass): Option[DiaPackage] = {
     val inPackages = f.packages.filter(p => p.geometry.contains(c.geometry))
-    // TODO: support for nested packages
+    // TODO: [low priority] support for graphically nested packages
     // sort by "contains" and return either most inner or path of packages
     inPackages.headOption
   }
 
   def assignPackages(f: DiaFile): DiaFile = {
     val newClasses = f.entities map { c =>
-      c.copy(ref = c.ref.copy(inPackage = getPackageForClass(f, c).map(_.name).getOrElse("")))
+      c.copy(ref = c.ref.copy(inPackage = {
+        getPackageForClass(f, c).map(_.name).getOrElse("")
+      }))
     }
     assert(newClasses.size == f.entities.size)
     f.copy(entities = newClasses)
@@ -324,22 +328,9 @@ object XmlParserHelper {
         case None => r
       }
 
-    def handleGenericClassRef(r: DiaGenericClassRef): DiaGenericClassRef = r.copy(base = handleClassRef(r.base).asInstanceOf[DiaNonGenericClassRefBase], params = r.params.map(handleClassRef))
-
-    def handleFunctionClassRef(r: DiaFunctionClassRef): DiaFunctionClassRef = r.copy(inputs = r.inputs.map(handleClassRef), output = r.output |> handleClassRef)
-
-    def handleClassRef[T >: DiaClassRefBase](r: T): T = {
-      r match {
-        case uc: DiaUserClassRef => handleUserClassRef(uc)
-        case gc: DiaGenericClassRef => handleGenericClassRef(gc)
-        case fc: DiaFunctionClassRef => handleFunctionClassRef(fc)
-        case _ => r
-      }
-    }
+    def handleOptClassRef(r: Option[DiaClassRefBase]): Option[DiaClassRefBase] = r.map(_.mapRecursivelyUserClassReferences(handleUserClassRef))
 
     def handleAttribute(a: DiaAttribute): DiaAttribute = a.copy(aType = handleOptClassRef(a.aType))
-
-    def handleOptClassRef(r: Option[DiaClassRefBase]): Option[DiaClassRefBase] = r.map(handleClassRef)
 
     def handleOperation(o: DiaOperationDescriptor): DiaOperationDescriptor = o.copy(
       oType = handleOptClassRef(o.oType),
@@ -579,5 +570,28 @@ object XmlParserHelper {
   def processAssociations(e: Elem, f: DiaFile): \/[String, DiaFile] = wrapErrorToJunction {
     Log.printDebug("processAssociations:")
     extractObjectsByType(e, DiaObjectTypeAssociation).foldLeft(f) { case (file, node) => processAssociation(node, file)}
+  }
+
+  def processImportTable(e: Elem, f: DiaFile): \/[String, DiaFile] = wrapErrorToJunction {
+    def getPackage(name: String): Option[String] = f.importTable.fullNameForClass(name).map(DiaClass.parseClassNameWithPackage(_)._2)
+
+    def func(ref: DiaUserClassRef): DiaUserClassRef =
+      if (ref.inPackage.nonEmpty) ref
+      else ref.copy(inPackage = getPackage(ref.name).getOrElse(""))
+
+    f.copy(
+      entities = f.entities.map { case entity =>
+        entity.copy(
+          operations = entity.operations.map(op =>
+            op.copy(parameters = op.parameters.map { case param =>
+              param.copy(pType = param.pType.map(_.mapRecursivelyUserClassReferences(func)))
+            })
+          ),
+          attributes = entity.attributes.map { case attr =>
+            attr.copy(aType = attr.aType.map(_.mapRecursivelyUserClassReferences(func)))
+          }
+        )
+      }
+    )
   }
 }
