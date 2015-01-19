@@ -181,7 +181,8 @@ object XmlParserHelper {
   val AttributeStereotypesPattern = "^<<([a-zA-Z ,]+)>>\\s*([a-zA-Z0-9]+)\\s*$".r
   val AttrStereoVal = "val"
   val AttrStereoVar = "var"
-  val ValidAttrStereos = Seq(AttrStereoVal, AttrStereoVar)
+  val AttrStereoLazy = "lazy"
+  val ValidAttrStereos = Seq(AttrStereoVal, AttrStereoVar, AttrStereoLazy)
 
   def ensureAttributeObeysClassStereotypes(attrStereo: String, isClassVal: Option[Boolean], attrName: String) {
     if (isClassVal.isDefined) {
@@ -195,18 +196,19 @@ object XmlParserHelper {
   def processAttribute(n: Node, isClassVal: Option[Boolean]): DiaAttribute = {
     assertAttributeType(n, DiaCompositeTypeUMLAttribute)
     val nameField = extractAttributeName(n)
-    val (name: String, isVal: Boolean) = parseAttributeNameAndIsValFromName(isClassVal, nameField)
+    val (name: String, isVal: Boolean, isLazy: Boolean) = parseAttributeNameIsValAndIsLazyFromName(isClassVal, nameField)
 
     DiaAttribute(
       name,
       extractDiaAttributeStringAndStrip(n, DiaAttributeType) |> fromStringUnchecked,
       extractVisibility(n),
       isVal,
-      extractDiaAttributeStringAndStrip(n, DiaAttributeValue) |> wrapNonEmptyStringToSome
+      extractDiaAttributeStringAndStrip(n, DiaAttributeValue) |> wrapNonEmptyStringToSome,
+      isLazy
     )
   }
 
-  def parseAttributeNameAndIsValFromName(isClassVal: Option[Boolean], nameField: String): (String, Boolean) =
+  def parseAttributeNameIsValAndIsLazyFromName(isClassVal: Option[Boolean], nameField: String): (String, Boolean, Boolean) =
     if (nameField.startsWith("<<")) {
       AttributeStereotypesPattern.findFirstMatchIn(nameField) match {
         case Some(rMatch) =>
@@ -214,14 +216,16 @@ object XmlParserHelper {
           val name = rMatch.group(2)
           if (!ValidAttrStereos.contains(stereo)) {
             Log.printInfo(s"Skipping unknown attribute stereotype '$stereo'.")
-            (name, true)
+            (name, true, false)
           } else {
             ensureAttributeObeysClassStereotypes(stereo, isClassVal, name)
-            (name, stereo != AttrStereoVar)
+            val isLazy = stereo == AttrStereoLazy
+            val isVal = stereo == AttrStereoVal || isLazy
+            (name, isVal, isLazy)
           }
         case None => throw new RuntimeException(s"Failed to parse an attribute with stereotype: '$nameField'")
       }
-    } else (nameField, true)
+    } else (nameField, true, false)
 
   def processParameter(n: Node): DiaOperationParameter = {
     assertAttributeType(n, DiaCompositeTypeUMLParameter)
@@ -551,12 +555,12 @@ object XmlParserHelper {
           }
           (a(0), finalType.some)
       }
-      val (name, isVal) = parseAttributeNameAndIsValFromName(f.idToClass(fromId).immutable.some, nameWithStereotype)
+      val (name, isVal, isLazy) = parseAttributeNameIsValAndIsLazyFromName(f.idToClass(fromId).immutable.some, nameWithStereotype)
       if (name.isEmpty) throw new RuntimeException(s"Association ${f.fullNameFromId(fromId)} -> ${f.fullNameFromId(toId)} has empty name.")
 
       f.copy(entities = f.entities.map { c =>
         if (c.id == fromId) {
-          c.copy(attributes = c.attributes :+ DiaAttribute(name, aType, point.visibility, isVal, None))
+          c.copy(attributes = c.attributes :+ DiaAttribute(name, aType, point.visibility, isVal, None, isLazy))
         } else c
       })
     } else f // nothing to be done on this side

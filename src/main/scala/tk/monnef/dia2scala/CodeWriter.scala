@@ -69,7 +69,8 @@ object CodeWriter {
   }
 
   def breakGroupsContainingDifferentPackages(d: Seq[Seq[EmittedParts]]): Seq[Seq[EmittedParts]] =
-    d.foldLeft(Seq(Seq[EmittedParts]())) { case (acc: Seq[Seq[EmittedParts]], group: Seq[EmittedParts]) =>
+    if (d.isEmpty) Seq()
+    else d.foldLeft(Seq(Seq[EmittedParts]())) { case (acc: Seq[Seq[EmittedParts]], group: Seq[EmittedParts]) =>
       group.foldLeft(acc) { case (innerAcc: Seq[Seq[EmittedParts]], item: EmittedParts) =>
         val lastGroup: Seq[EmittedParts] = innerAcc.last
         if (lastGroup.isEmpty || lastGroup.head.inPackage == item.inPackage) innerAcc.init :+ (innerAcc.last :+ item)

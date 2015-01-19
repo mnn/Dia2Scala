@@ -402,7 +402,7 @@ case class DiaOperationDescriptor(name: String, visibility: DiaVisibility, param
 
 case class DiaOperationParameter(name: String, pType: Option[DiaClassRefBase])
 
-case class DiaAttribute(name: String, aType: Option[DiaClassRefBase], visibility: DiaVisibility, isVal: Boolean, defaultValue: Option[String])
+case class DiaAttribute(name: String, aType: Option[DiaClassRefBase], visibility: DiaVisibility, isVal: Boolean, defaultValue: Option[String], isLazy: Boolean)
 
 case class DiaGeometry(x: Double, y: Double, width: Double, height: Double) {
   def contains(other: DiaGeometry): Boolean = contains(other.x, other.y, other.width, other.height)

@@ -44,9 +44,15 @@ This section lists custom stereotypes.
 **TODO**: pictures of diagrams with either short text description or corresponding code
 
 
+Not implemented yet
+-------------------
+*  static members of classes and traits (they will be translated to companion objects)
+
+
 Known issues
 ------------
 *  missing override modifier
+*  classes with companion objects are being rewritten (missing in generated source files)
 
 
 Not supported
