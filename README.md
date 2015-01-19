@@ -40,6 +40,7 @@ Usage: dia2scala [options]
 Notation
 --------
 This section lists custom stereotypes.
+
 **TODO**: pictures of diagrams with either short text description or corresponding code
 
 
@@ -51,8 +52,8 @@ Known issues
 Not supported
 -------------
 *  template classes (generic user classes)
-*  splitting to methods when overrinding def with var (*workaround*: in child split those methods manually)
-*  graphically nested packages (*workaround*: label packages with thier full names)
+*  splitting to methods when overrinding `def` with `var` (*workaround:* split those methods manually in child)
+*  graphically nested packages (*workaround:* label packages with thier full names)
 
 
 License
