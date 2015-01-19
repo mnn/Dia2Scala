@@ -116,7 +116,7 @@ class TestXmlParser extends FlatSpec {
   }
 
   final val xmlAttribute = "       <dia:composite type=\"umlattribute\">\n          <dia:attribute name=\"name\">\n            <dia:string>#aReference#</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"type\">\n            <dia:string>#ClassA#</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"value\">\n            <dia:string>##</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"comment\">\n            <dia:string>##</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"visibility\">\n            <dia:enum val=\"2\"/>\n          </dia:attribute>\n          <dia:attribute name=\"abstract\">\n            <dia:boolean val=\"false\"/>\n          </dia:attribute>\n          <dia:attribute name=\"class_scope\">\n            <dia:boolean val=\"false\"/>\n          </dia:attribute> </dia:composite>"
-  final val expectedAttributeA = DiaAttribute("aReference", createUncheckedUserClassRef("ClassA").some, DiaVisibility.Protected, true, None, false)
+  final val expectedAttributeA = DiaAttribute("aReference", createUncheckedUserClassRef("ClassA").some, DiaVisibility.Protected, true, None, false, false)
   "processAttribute" should "process an attribute" in {
     val elem = xml.XML.loadString(xmlAttribute)
     val res = XmlParserHelper.processAttribute(elem, None)
@@ -124,7 +124,7 @@ class TestXmlParser extends FlatSpec {
   }
 
   final val xmlAttributeWithVal = "        <dia:composite type=\"umlattribute\">\n          <dia:attribute name=\"name\">\n            <dia:string>#&lt;&lt;val&gt;&gt; valAttr#</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"type\">\n            <dia:string>##</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"value\">\n            <dia:string>#defaultValValue#</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"comment\">\n            <dia:string>##</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"visibility\">\n            <dia:enum val=\"0\"/>\n          </dia:attribute>\n          <dia:attribute name=\"abstract\">\n            <dia:boolean val=\"false\"/>\n          </dia:attribute>\n          <dia:attribute name=\"class_scope\">\n            <dia:boolean val=\"false\"/>\n          </dia:attribute>\n        </dia:composite>"
-  final val expectedAttributeValAttr = DiaAttribute("valAttr", None, DiaVisibility.Public, true, "defaultValValue".some, false)
+  final val expectedAttributeValAttr = DiaAttribute("valAttr", None, DiaVisibility.Public, true, "defaultValValue".some, false, false)
   it should "process an attribute with default value and tagged with <<val>>" in {
     val elem = xml.XML.loadString(xmlAttributeWithVal)
     val res = XmlParserHelper.processAttribute(elem, true.some)
@@ -132,7 +132,7 @@ class TestXmlParser extends FlatSpec {
   }
 
   final val xmlAttributeWithVar = "        <dia:composite type=\"umlattribute\">\n          <dia:attribute name=\"name\">\n            <dia:string>#&lt;&lt;var&gt;&gt; varAttr#</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"type\">\n            <dia:string>#String#</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"value\">\n            <dia:string>#\"sss\"#</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"comment\">\n            <dia:string>##</dia:string>\n          </dia:attribute>\n          <dia:attribute name=\"visibility\">\n            <dia:enum val=\"1\"/>\n          </dia:attribute>\n          <dia:attribute name=\"abstract\">\n            <dia:boolean val=\"false\"/>\n          </dia:attribute>\n          <dia:attribute name=\"class_scope\">\n            <dia:boolean val=\"false\"/>\n          </dia:attribute>\n        </dia:composite>"
-  final val expectedAttributeVarAttr = DiaAttribute("varAttr", DiaScalaClassRef.fromString("String").some, DiaVisibility.Private, false, "\"sss\"".some, false)
+  final val expectedAttributeVarAttr = DiaAttribute("varAttr", DiaScalaClassRef.fromString("String").some, DiaVisibility.Private, false, "\"sss\"".some, false, false)
   it should "process an attribute with default value and tagged with <<var>>" in {
     val elem = xml.XML.loadString(xmlAttributeWithVar)
     val res = XmlParserHelper.processAttribute(elem, false.some)
@@ -243,16 +243,16 @@ class TestXmlParser extends FlatSpec {
       var src = res.findEntity(srcCName).head
 
       val srcRefOpt = DiaGenericClassRef.createOption(DiaClassRefBase.createUncheckedUserClassRef(srcCName)).some
-      assert(targ.attributes == Seq(DiaAttribute("sourceRefOpt", srcRefOpt, DiaVisibility.Private, true, None, false)))
+      assert(targ.attributes == Seq(DiaAttribute("sourceRefOpt", srcRefOpt, DiaVisibility.Private, true, None, false, false)))
 
       val targetRefDef = DiaClassRefBase.createUncheckedUserClassRef(targCName)
       val targetRefMany = DiaGenericClassRef.createSeq(DiaClassRefBase.createUncheckedUserClassRef(targCName))
       val targetRefOver = DiaGenericClassRef.createOption(DiaClassRefBase.createUncheckedUserClassRef(targCName))
 
       val expAttrs: Set[DiaAttribute] = Set(
-        DiaAttribute("targetRefDef", targetRefDef.some, DiaVisibility.Public, true, None, false),
-        DiaAttribute("targetRefMany", targetRefMany.some, DiaVisibility.Public, true, None, false),
-        DiaAttribute("targetRefOver", targetRefOver.some, DiaVisibility.Private, false, None, false)
+        DiaAttribute("targetRefDef", targetRefDef.some, DiaVisibility.Public, true, None, false, false),
+        DiaAttribute("targetRefMany", targetRefMany.some, DiaVisibility.Public, true, None, false, false),
+        DiaAttribute("targetRefOver", targetRefOver.some, DiaVisibility.Private, false, None, false, false)
       )
 
       assert(src.attributes.toSet == expAttrs)
@@ -274,7 +274,7 @@ class TestXmlParser extends FlatSpec {
     val id = "id"
     val pack = "pack"
     val funcRef = DiaFunctionClassRef(Seq(DiaClassRefBase.createUncheckedUserClassRef(id)), DiaClassRefBase.createUncheckedUserClassRef(id))
-    val cl = DiaEntity(DiaUserClassRef(id, pack), null, None, Seq(), id, Seq(DiaAttribute("attr", Some(funcRef), DiaVisibility.Private, false, None, false)), Seq(), DiaEntityType.Class, true, false, false)
+    val cl = DiaEntity(DiaUserClassRef(id, pack), null, None, Seq(), id, Seq(DiaAttribute("attr", Some(funcRef), DiaVisibility.Private, false, None, false, false)), Seq(), DiaEntityType.Class, true, false, false)
     val f = DiaFile(Seq(DiaPackage(pack, null)), Seq(cl), Map(id -> cl), ImportTable.empty)
 
     val r = XmlParserHelper.processClassRefInSamePackage(f)

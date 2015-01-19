@@ -46,7 +46,8 @@ object XmlParser {
           d <- processAssociations(xml, c)
           e <- processClassRefInSamePackageWrapped(xml, d)
           f <- processImportTable(xml, e)
-          g <- processErrors(f)
+          g <- processOverrideModifier(xml, f)
+          h <- processErrors(g)
         } yield g
     }
   }
@@ -204,7 +205,8 @@ object XmlParserHelper {
       extractVisibility(n),
       isVal,
       extractDiaAttributeStringAndStrip(n, DiaAttributeValue) |> wrapNonEmptyStringToSome,
-      isLazy
+      isLazy,
+      false
     )
   }
 
@@ -560,7 +562,7 @@ object XmlParserHelper {
 
       f.copy(entities = f.entities.map { c =>
         if (c.id == fromId) {
-          c.copy(attributes = c.attributes :+ DiaAttribute(name, aType, point.visibility, isVal, None, isLazy))
+          c.copy(attributes = c.attributes :+ DiaAttribute(name, aType, point.visibility, isVal, None, isLazy, false))
         } else c
       })
     } else f // nothing to be done on this side
@@ -583,19 +585,32 @@ object XmlParserHelper {
       if (ref.inPackage.nonEmpty) ref
       else ref.copy(inPackage = getPackage(ref.name).getOrElse(""))
 
-    f.copy(
-      entities = f.entities.map { case entity =>
-        entity.copy(
-          operations = entity.operations.map(op =>
-            op.copy(parameters = op.parameters.map { case param =>
-              param.copy(pType = param.pType.map(_.mapRecursivelyUserClassReferences(func)))
-            })
-          ),
-          attributes = entity.attributes.map { case attr =>
-            attr.copy(aType = attr.aType.map(_.mapRecursivelyUserClassReferences(func)))
-          }
-        )
+    f.mapOperationsAndAttributesTypes(_.mapRecursivelyUserClassReferences(func))
+  }
+
+  // TODO: override modifier for operations
+  def processOverrideModifier(elem: Elem, f: DiaFile): \/[String, DiaFile] = wrapErrorToJunction {
+    def walkEntity[T](skippingFirst: Boolean, currEntity: DiaEntity, visitedClasses: Set[DiaEntity], data: T, checkFunc: (DiaEntity, T) => Boolean): Boolean = {
+      currEntity.extendsFrom.foreach { ef => if (visitedClasses.exists(vc => vc.ref.fullName == ef.emitCodeWithFullName())) throw new RuntimeException("Detected cyclic dependency.")}
+      def toClass(b: DiaClassRefBase): Seq[DiaEntity] = f.findClassInScalaSense(b.emitCodeWithFullName())
+
+      if (!skippingFirst && checkFunc(currEntity, data)) true
+      else {
+        val extendsFromClass: Option[DiaEntity] = currEntity.extendsFrom.map(toClass).map(_.head)
+        val parentClasses: Seq[DiaEntity] = extendsFromClass.map(Seq(_)).getOrElse(Seq()) ++ currEntity.mixins.flatMap(toClass)
+        val newVisitedClasses = extendsFromClass match {case Some(par) => visitedClasses + par case None => visitedClasses}
+        parentClasses.exists(p => walkEntity(false, p, newVisitedClasses, data, checkFunc))
       }
-    )
+    }
+
+    def attributeWithSameNameExistsInHierarchy(currEntity: DiaEntity, name: String): Boolean =
+      walkEntity(true, currEntity, Set(), name, (ce: DiaEntity, d: String) => ce.attributes.exists(a => a.name == name))
+
+    f.copy(entities = f.entities.map { case entity =>
+      entity.copy(attributes = entity.attributes.map { case attr =>
+        if (attributeWithSameNameExistsInHierarchy(entity, attr.name)) attr.copy(isOverriding = true)
+        else attr
+      })
+    })
   }
 }

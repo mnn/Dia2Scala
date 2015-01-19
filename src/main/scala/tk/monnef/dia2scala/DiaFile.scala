@@ -1,5 +1,6 @@
 package tk.monnef.dia2scala
 
+import tk.monnef.dia2scala.DiaEntityType
 import tk.monnef.dia2scala.DiaEntityType.DiaEntityType
 import tk.monnef.dia2scala.DiaVisibility.DiaVisibility
 
@@ -42,7 +43,27 @@ case class DiaFile(packages: Seq[DiaPackage], entities: Seq[DiaEntity], idToClas
   }
 
   def findObject(ref: DiaUserClassRef): Seq[DiaEntity] = {
-    findEntity(ref).filter(_.classType == DiaEntityType.Object)
+    findEntity(ref, DiaEntityType.Object)
+  }
+
+  def findClass(ref: DiaUserClassRef): Seq[DiaEntity] = {
+    findEntity(ref, DiaEntityType.Class)
+  }
+
+  def findClassInScalaSense(fullName: String): Seq[DiaEntity] = {
+    findClassInScalaSense(DiaClassRefBase.createUncheckedUserClassRef(fullName))
+  }
+
+  def findClassInScalaSense(ref: DiaUserClassRef): Seq[DiaEntity] = {
+    findEntity(ref, DiaEntityType.Class) ++ findEntity(ref, DiaEntityType.Enumeration) ++ findEntity(ref, DiaEntityType.Trait)
+  }
+
+  def findEntity(ref: DiaUserClassRef, entType: DiaEntityType): Seq[DiaEntity] = {
+    findEntity(ref).filter(_.classType == entType)
+  }
+
+  def findEntity(fullName: String, entType: DiaEntityType): Seq[DiaEntity] = {
+    findEntity(fullName).filter(_.classType == entType)
   }
 
   def entityExists(ref: DiaUserClassRef): Boolean = findEntity(ref).nonEmpty
@@ -53,6 +74,23 @@ case class DiaFile(packages: Seq[DiaPackage], entities: Seq[DiaEntity], idToClas
   }
 
   def isEnumeration(fullName: String): Boolean = findEntity(fullName) |> { d => d.exists(_.classType == DiaEntityType.Enumeration)}
+
+  def mapOperationsAndAttributesTypes(func: DiaClassRefBase => DiaClassRefBase): DiaFile = {
+    copy(
+      entities = entities.map { case entity =>
+        entity.copy(
+          operations = entity.operations.map(op =>
+            op.copy(parameters = op.parameters.map { case param =>
+              param.copy(pType = param.pType.map(func))
+            })
+          ),
+          attributes = entity.attributes.map { case attr =>
+            attr.copy(aType = attr.aType.map(func))
+          }
+        )
+      }
+    )
+  }
 }
 
 object DiaFile {
@@ -402,7 +440,7 @@ case class DiaOperationDescriptor(name: String, visibility: DiaVisibility, param
 
 case class DiaOperationParameter(name: String, pType: Option[DiaClassRefBase])
 
-case class DiaAttribute(name: String, aType: Option[DiaClassRefBase], visibility: DiaVisibility, isVal: Boolean, defaultValue: Option[String], isLazy: Boolean)
+case class DiaAttribute(name: String, aType: Option[DiaClassRefBase], visibility: DiaVisibility, isVal: Boolean, defaultValue: Option[String], isLazy: Boolean, isOverriding:Boolean)
 
 case class DiaGeometry(x: Double, y: Double, width: Double, height: Double) {
   def contains(other: DiaGeometry): Boolean = contains(other.x, other.y, other.width, other.height)

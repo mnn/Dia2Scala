@@ -76,6 +76,7 @@ object CodeEmitterHelper {
     def genAttributes: Seq[String] = c.attributes.map { a: DiaAttribute =>
       indent +
         genVisibility(a.visibility) +
+        (if (a.isOverriding) "override " else "") +
         (if (a.isLazy) "lazy " else "") +
         (if (a.isVal) "val " else "var ") +
         sanitizeName(a.name) +
