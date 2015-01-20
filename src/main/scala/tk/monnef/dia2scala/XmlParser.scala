@@ -10,6 +10,7 @@ import tk.monnef.dia2scala.DiaEntityType._
 import tk.monnef.dia2scala.DiaVisibility.DiaVisibility
 import tk.monnef.dia2scala.Utils._
 
+import scala.annotation.tailrec
 import scala.util.Try
 import scala.util.matching.Regex
 
@@ -95,6 +96,7 @@ object XmlParserHelper {
   final val DiaAttributeVisibility = "visibility"
   final val DiaAttributeId = "id"
   final val DiaAttributeParameters = "parameters"
+  final val DiaAttributeClasScope = "class_scope"
 
   final val StringBarrier = '#'
 
@@ -206,7 +208,8 @@ object XmlParserHelper {
       isVal,
       extractDiaAttributeStringAndStrip(n, DiaAttributeValue) |> wrapNonEmptyStringToSome,
       isLazy,
-      false
+      false,
+      extractDiaAttributeBoolean(n, DiaAttributeClasScope)
     )
   }
 
@@ -244,7 +247,8 @@ object XmlParserHelper {
       extractVisibility(n),
       (extractDiaAttributeByName(n, DiaAttributeParameters) \ DiaNodeTypeComposite).map(processParameter),
       extractDiaAttributeStringAndStrip(n, DiaAttributeType) |> fromStringUnchecked,
-      false
+      false,
+      extractDiaAttributeBoolean(n, DiaAttributeClasScope)
     )
   }
 
@@ -321,6 +325,26 @@ object XmlParserHelper {
 
   def createIdToClassMapping(f: DiaFile): DiaFile = f.copy(idToClass = f.entities.map { c => c.id -> c}.toMap)
 
+  def splitClassScopedMembersToCompanionObjects(f: DiaFile): DiaFile = {
+    @tailrec def loop(input: Seq[DiaEntity], res: Seq[DiaEntity], f: DiaFile): Seq[DiaEntity] = input match {
+      case head :: rest =>
+        val (staticMethods, instanceMethods) = head.operations.partition(_.isClassScope)
+        val (staticFields, instanceFields) = head.attributes.partition(_.isClassScope)
+        val newRes =
+          if (staticMethods.nonEmpty || staticFields.nonEmpty) {
+            val newHead = head.copy(operations = instanceMethods, attributes = instanceFields, hasCompanionObject = true)
+            if (f.findObject(head.ref).nonEmpty) throw new RuntimeException("Cannot split static methods/fields (class scoped operations/attributes) in " + head.ref.fullName + " to a new companion object, because object with same name already exists.")
+            val newCompanion = DiaEntity(head.ref, head.geometry, None, Seq(), head.id + "_syntheticCompanionObject", staticFields, staticMethods, DiaEntityType.Object, false, false, false)
+            res :+ newHead :+ newCompanion
+          } else res :+ head
+        loop(rest, newRes, f)
+
+      case _ => res
+    }
+
+    f.copy(entities = loop(f.entities, Seq(), f))
+  }
+
   def processClassRefInSamePackageWrapped(e: Elem, f: DiaFile): \/[String, DiaFile] = wrapErrorToJunction {
     processClassRefInSamePackage(f) |> {printEntities("processClassRefInSamePackageWrapped:", _)}
   }
@@ -382,7 +406,8 @@ object XmlParserHelper {
     } yield f.copy(entities = parsedClasses) |> {printEntities("raw", _)} |>
       assignPackages |> {printEntities("assignPackages", _)} |>
       createIdToClassMapping |> {printEntities("createIdToClassMapping", _)} |>
-      markClassesOfCompanionObjects |> {printEntities("markClassesOfCompanionObjects", _)}
+      markClassesOfCompanionObjects |> {printEntities("markClassesOfCompanionObjects", _)} |>
+      splitClassScopedMembersToCompanionObjects |> {printEntities("splitClassScopedOperationsToCompanionObjects", _)}
   }
 
   def parseConnections(n: Node, inversed: Boolean = true): (String, String) = {
@@ -563,7 +588,7 @@ object XmlParserHelper {
 
       f.copy(entities = f.entities.map { c =>
         if (c.id == fromId) {
-          c.copy(attributes = c.attributes :+ DiaAttribute(name, aType, point.visibility, isVal, None, isLazy, false))
+          c.copy(attributes = c.attributes :+ DiaAttribute(name, aType, point.visibility, isVal, None, isLazy, false, false))
         } else c
       })
     } else f // nothing to be done on this side
@@ -589,7 +614,6 @@ object XmlParserHelper {
     f.mapOperationsAndAttributesTypes(_.mapRecursivelyUserClassReferences(func))
   }
 
-  // TODO: override modifier for operations
   def processOverrideModifier(elem: Elem, f: DiaFile): \/[String, DiaFile] = wrapErrorToJunction {
     def walkEntity[T](skippingFirst: Boolean, currEntity: DiaEntity, visitedClasses: Set[DiaEntity], data: T, checkFunc: (DiaEntity, T) => Boolean): Boolean = {
       currEntity.extendsFrom.foreach { ef => if (visitedClasses.exists(vc => vc.ref.fullName == ef.emitCodeWithFullName())) throw new RuntimeException("Detected cyclic dependency.")}
@@ -615,7 +639,7 @@ object XmlParserHelper {
     f.copy(entities = f.entities.map { case entity =>
       entity.copy(attributes = entity.attributes.map { case attr =>
         if (attributeWithSameNameExistsInHierarchy(entity, attr.name) ||
-          operationWithSameNameAndParametersExistsInHierarchy(entity, DiaOperationDescriptor(attr.name, null, Seq(), attr.aType, false))) {
+          operationWithSameNameAndParametersExistsInHierarchy(entity, DiaOperationDescriptor(attr.name, null, Seq(), attr.aType, false, false))) {
           attr.copy(isOverriding = true)
         }
         else attr

@@ -46,12 +46,12 @@ This section lists custom stereotypes.
 
 Not implemented yet
 -------------------
-*  static members of classes and traits (they will be translated to companion objects)
+All planned features are implemented.
 
 
 Known issues
 ------------
-*  missing override modifier
+Currently none.
 
 
 Not supported
@@ -59,6 +59,13 @@ Not supported
 *  template classes (generic user classes)
 *  splitting to methods when overrinding `def` with `var` (*workaround:* split those methods manually in child)
 *  graphically nested packages (*workaround:* label packages with thier full names)
+
+
+Donation
+--------
+If you use this project, please consider a donation of any amount (author is a not-wealthy student).
+
+[![PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_SM.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=U6PGB7P24WWSU&lc=CZ&item_name=monnef%20%2d%20Dia2Scala&currency_code=CZK&bn=PP%2dDonationsBF%3abtn_donate_SM%2egif%3aNonHosted)
 
 
 License
