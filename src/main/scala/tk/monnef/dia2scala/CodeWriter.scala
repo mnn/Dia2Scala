@@ -21,9 +21,15 @@ object CodeWriter {
 
     Log.printTrace(s"inFileToClasses, required classes view:\n" + inFileToClasses.map { case (scFile, classes) => scFile + ":\n" + classes.map { case c => c.fullName + " -> " + c.requiredClasses}.mkString("\n") + "\n"}.mkString("\n") + "\n")
 
+    def filterOutClassesInSameFile(in: Seq[String], classes: Seq[EmittedParts]): Seq[String] = in.filter(i => !classes.exists(_.fullName == i))
+    def filterOutClassesInSamePackage(in: Seq[String], classes: Seq[EmittedParts]): Seq[String] = {
+      val currPackage = classes.head.inPackage
+      in.filter(i => i.endsWith("._") || DiaEntity.parseClassNameWithPackage(i)._2 != currPackage)
+    }
+
     val inFileToClassesWithImports = inFileToClasses.map { case (scFile, classes) =>
       (scFile, classes,
-        classes.flatMap(_.requiredClasses).distinct.filter(i => !classes.exists(_.fullName == i)).sorted
+        classes.flatMap(_.requiredClasses).distinct |> {filterOutClassesInSameFile(_, classes)} |> {filterOutClassesInSamePackage(_, classes)} |> {_.sorted}
         )
     }
 

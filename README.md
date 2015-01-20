@@ -5,8 +5,7 @@ This is a code generator - a console application. It works with one file from di
 
 Examples
 --------
-**TODO**: showcase = diagrams + generated code
-
+[Showcase page](https://github.com/mnn/Dia2Scala/blob/master/other/Example.md)
 
 Compilation
 -----------
@@ -59,6 +58,7 @@ Not supported
 *  template classes (generic user classes)
 *  splitting to methods when overrinding `def` with `var` (*workaround:* split those methods manually in child)
 *  graphically nested packages (*workaround:* label packages with thier full names)
+*  default values
 
 
 Donation
