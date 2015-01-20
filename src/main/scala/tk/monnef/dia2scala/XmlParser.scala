@@ -552,7 +552,7 @@ object XmlParserHelper {
 
     private val patternOne = "1".r
     private val patternZeroToOne = "0(?:(?:..)|-)1".r
-    private val patternZeroStar = "[01](?:(?:..)|-)[\\*n]".r
+    private val patternZeroStar = "(?:[01](?:(?:..)|-))?[\\*n]".r
 
     def parseMultiplicityString(s: String): Option[MultiplicityType] = s.replaceAll("\\s", "") match {
       case patternOne() => One.some
