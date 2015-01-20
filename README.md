@@ -7,6 +7,7 @@ Examples
 --------
 [Showcase page](https://github.com/mnn/Dia2Scala/blob/master/other/Example.md)
 
+
 Compilation
 -----------
 [SBT](http://www.scala-sbt.org/)
@@ -38,9 +39,8 @@ Usage: dia2scala [options]
 
 Notation
 --------
-This section lists custom stereotypes.
-
-**TODO**: pictures of diagrams with either short text description or corresponding code
+Following page shows custom stereotypes on diagrams and equivalent source code.
+[Notation page](https://github.com/mnn/Dia2Scala/blob/master/other/Notation.md)
 
 
 Not implemented yet
