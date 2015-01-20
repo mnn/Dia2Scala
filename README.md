@@ -36,11 +36,18 @@ Usage: dia2scala [options]
         tries group related classes to one source file
 ```
 
+It is strongly recommended to use the `-d` option.
+
 
 Notation
 --------
 Following page shows custom stereotypes on diagrams and equivalent source code.
 [Notation page](https://github.com/mnn/Dia2Scala/blob/master/other/Notation.md)
+
+
+Download
+--------
+Fat jars are available on my blog - repository website (link at a top of this page).
 
 
 Not implemented yet
@@ -55,6 +62,8 @@ Currently none.
 
 Not supported
 -------------
+*  `type` construct
+*  generic parameters of operations (methods)
 *  template classes (generic user classes)
 *  splitting to methods when overrinding `def` with `var` (*workaround:* split those methods manually in child)
 *  graphically nested packages (*workaround:* label packages with thier full names)
