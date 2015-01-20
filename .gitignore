@@ -1,8 +1,10 @@
 /.idea
-/project
+/project/*
+!/project/*.sbt
 /target
 /out
 *.dia~
 projectFilesBackup
 /classDiargram01.dia
 /src/test/resources/diagrams/example01.png
+/.history

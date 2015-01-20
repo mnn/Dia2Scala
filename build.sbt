@@ -24,5 +24,7 @@ buildInfoPackage := "tk.monnef.dia2scala"
 crossPaths := false
 
 artifactName := { (sv: ScalaVersion, module: ModuleID, artifact: Artifact) =>
-  "dia2scala" + "_" + module.revision + "." + artifact.extension
+  "dia2scala" + "_" + module.revision + "_slim" + "." + artifact.extension
 }
+
+assemblyJarName in assembly := s"${name.value.toLowerCase}_${version.value}.jar"
