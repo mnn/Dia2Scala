@@ -1,5 +1,6 @@
 Notation
 ========
+Inspired by [SO answer](https://stackoverflow.com/questions/7815983/any-uml-tools-for-scala/7817723#7817723) and its source - thesis [Evaluierung des Einsatzes von Scala bei der Entwicklung für die Android-Plattform](http://tribosmap.googlecode.com/files/MRachimowDiplA.pdf) by Meiko Rachimow.
 
 
 Inheritance
