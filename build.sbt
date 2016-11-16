@@ -2,15 +2,17 @@ name := "Dia2Scala"
 
 version := "0.1"
 
-scalaVersion := "2.11.4"
+scalaVersion := "2.12.0"
 
 resolvers += Resolver.sonatypeRepo("public")
 
-libraryDependencies += "com.github.scopt" %% "scopt" % "3.2.0"
+libraryDependencies += "org.scala-lang.modules" %% "scala-xml" % "1.0.6"
 
-libraryDependencies += "org.scalatest" % "scalatest_2.11" % "2.2.1" % "test"
+libraryDependencies += "com.github.scopt" %% "scopt" % "3.5.0"
 
-libraryDependencies += "org.scalaz" %% "scalaz-core" % "7.1.0"
+libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.0" % "test"
+
+libraryDependencies += "org.scalaz" %% "scalaz-core" % "7.2.7"
 
 buildInfoSettings
 
@@ -28,3 +30,4 @@ artifactName := { (sv: ScalaVersion, module: ModuleID, artifact: Artifact) =>
 }
 
 assemblyJarName in assembly := s"${name.value.toLowerCase}_${version.value}.jar"
+
